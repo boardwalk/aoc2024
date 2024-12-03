@@ -9,32 +9,58 @@ struct Report {
     levels: Vec<usize>,
 }
 
-impl Report {
-    fn is_safe_p1(&self) -> bool {
-        let all_incr = self.levels.as_slice().array_windows().all(|[a, b]| *a > *b);
+fn map_index(idx: usize, excluded_idx: Option<usize>) -> usize {
+    if let Some(excluded_idx) = excluded_idx {
+        // if we're pretending an index was deleted, indices >= the deleted index are at idx + 1 in the physical array
+        if idx < excluded_idx {
+            idx
+        } else {
+            idx + 1
+        }
+    } else {
+        // if we're not pretending anything was deleted, no mapping is needed
+        idx
+    }
+}
 
-        let all_decr = self.levels.as_slice().array_windows().all(|[a, b]| *a < *b);
+fn all_pairs_excluding<T>(
+    items: &[T],
+    pred: impl Fn(&T, &T) -> bool,
+    excluded_idx: Option<usize>,
+) -> bool {
+    for idx in 0..items.len() - 1 {
+        let idx_1 = map_index(idx, excluded_idx);
+        let idx_2 = map_index(idx + 1, excluded_idx);
+
+        let Some(item_1) = items.get(idx_1) else {
+            break;
+        };
+
+        let Some(item_2) = items.get(idx_2) else {
+            break;
+        };
+
+        if !pred(item_1, item_2) {
+            return false;
+        }
+    }
+    true
+}
+
+impl Report {
+    fn is_safe_excluding(&self, excluded_idx: Option<usize>) -> bool {
+        let all_incr = all_pairs_excluding(&self.levels, |a, b| *a > *b, excluded_idx);
+        let all_decr = all_pairs_excluding(&self.levels, |a, b| *a < *b, excluded_idx);
 
         if !(all_incr || all_decr) {
             return false;
         }
 
-        self.levels
-            .as_slice()
-            .array_windows()
-            .all(|[a, b]| matches!(a.abs_diff(*b), 1 | 2 | 3))
-    }
-
-    fn is_safe_p2(&mut self) -> bool {
-        for i in 0..self.levels.len() {
-            let val = self.levels.remove(i);
-            let is_safe = self.is_safe_p1();
-            self.levels.insert(i, val);
-            if is_safe {
-                return true;
-            }
-        }
-        false
+        all_pairs_excluding(
+            &self.levels,
+            |a, b| matches!(a.abs_diff(*b), 1 | 2 | 3),
+            excluded_idx,
+        )
     }
 }
 
@@ -61,12 +87,13 @@ fn main() -> Result<(), Error> {
     }
 
     let num_safe = reports
-        .iter_mut()
+        .iter()
         .map(|report| {
             if PART_TWO {
-                report.is_safe_p2()
+                (0..report.levels.len())
+                    .any(|excluded_idx| report.is_safe_excluding(Some(excluded_idx)))
             } else {
-                report.is_safe_p1()
+                report.is_safe_excluding(None)
             }
         })
         .filter(|x| *x)
