@@ -9,44 +9,20 @@ struct Report {
     levels: Vec<usize>,
 }
 
-fn is_safe_diff(a: usize, b: usize) -> bool {
-    match a.abs_diff(b) {
-        1 | 2 | 3 => true,
-        _ => false,
-    }
-}
-
 impl Report {
     fn is_safe_p1(&self) -> bool {
-        let num_incr = self
-            .levels
-            .as_slice()
-            .array_windows()
-            .map(|[a, b]| *a > *b)
-            .filter(|b| *b)
-            .count();
+        let all_incr = self.levels.as_slice().array_windows().all(|[a, b]| *a > *b);
 
-        let num_decr = self
-            .levels
-            .as_slice()
-            .array_windows()
-            .map(|[a, b]| *a < *b)
-            .filter(|b| *b)
-            .count();
+        let all_decr = self.levels.as_slice().array_windows().all(|[a, b]| *a < *b);
 
-        if !(num_incr == self.levels.len() - 1 || num_decr == self.levels.len() - 1) {
+        if !(all_incr || all_decr) {
             return false;
         }
 
-        let num_safe = self
-            .levels
+        self.levels
             .as_slice()
             .array_windows()
-            .map(|[a, b]| is_safe_diff(*a, *b))
-            .filter(|b| *b)
-            .count();
-
-        num_safe == self.levels.len() - 1
+            .all(|[a, b]| matches!(a.abs_diff(*b), 1 | 2 | 3))
     }
 
     fn is_safe_p2(&mut self) -> bool {
