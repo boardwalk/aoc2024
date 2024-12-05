@@ -12,9 +12,6 @@ impl Grid {
         let mut rows = Vec::new();
         for ln in r.lines() {
             let ln = ln?;
-            if ln.contains('.') {
-                bail!("reserved char used");
-            }
 
             let row: Vec<char> = ln.chars().collect();
 
@@ -49,72 +46,59 @@ impl Grid {
 
         let ch = self.rows.get(row)?.get(col)?;
 
-        if *ch == '.' {
-            None
-        } else {
-            Some(*ch)
-        }
-    }
-
-    fn take(&mut self, row: i64, col: i64) -> Option<char> {
-        let row = usize::try_from(row).ok()?;
-        let col = usize::try_from(col).ok()?;
-
-        let ch = self.rows.get_mut(row)?.get_mut(col)?;
-        if *ch == '.' {
-            None
-        } else {
-            Some(std::mem::replace(ch, '.'))
-        }
+        Some(*ch)
     }
 }
 
-fn try_word(grid: &mut Grid, mut start_r: i64, mut start_c: i64, dr: i64, dc: i64) -> bool {
-    const WORD: &[char] = &['X', 'M', 'A', 'S'];
-    let mut r = start_r;
-    let mut c = start_c;
-
-    for word_char in WORD {
-        let Some(ch) = grid.get(r, c) else {
-            return false;
-        };
-
-        if ch != *word_char {
-            return false;
-        }
-        r += dr;
-        c += dc;
+fn eval_x_2(grid: &Grid, r: i64, c: i64) -> bool {
+    // center must be an A
+    if grid.get(r, c).unwrap() != 'A' {
+        return false;
     }
 
-    let mut r = start_r;
-    let mut c = start_c;
+    let ul = grid.get(r - 1, c - 1).unwrap();
+    let ur = grid.get(r - 1, c + 1).unwrap();
+    let dr = grid.get(r + 1, c + 1).unwrap();
+    let dl = grid.get(r + 1, c - 1).unwrap();
 
-    for _word_char in WORD {
-        // grid.take(r, c).unwrap();
-        r += dr;
-        c += dc;
+    // corners must be S or M
+    if ul != 'S' && ul != 'M' {
+        return false;
+    }
+
+    if ur != 'S' && ur != 'M' {
+        return false;
+    }
+
+    if dr != 'S' && dr != 'M' {
+        return false;
+    }
+
+    if dl != 'S' && dl != 'M' {
+        return false;
+    }
+
+    // opposite corners must not match (e.g. MAM or SAS)
+    if ul == dr {
+        return false;
+    }
+
+    if ur == dl {
+        return false;
     }
 
     true
 }
 
 fn main() -> Result<(), Error> {
-    let mut grid = Grid::read(std::io::stdin().lock())?;
+    let grid = Grid::read(std::io::stdin().lock())?;
 
     let mut num_found = 0;
 
-    for r in 0..grid.num_rows() {
-        for c in 0..grid.num_cols() {
-            for dr in [-1, 0, 1] {
-                for dc in [-1, 0, 1] {
-                    if dr == 0 && dc == 0 {
-                        continue;
-                    }
-
-                    if try_word(&mut grid, r, c, dr, dc) {
-                        num_found += 1;
-                    }
-                }
+    for r in 1..grid.num_rows() - 1 {
+        for c in 1..grid.num_cols() - 1 {
+            if eval_x_2(&grid, r, c) {
+                num_found += 1;
             }
         }
     }
