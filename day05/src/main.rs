@@ -40,32 +40,36 @@ fn load_updates() -> Vec<Vec<usize>> {
     updates
 }
 
-fn is_update_ok(update: &[usize], rules: &[(usize, usize)]) -> bool {
-    let page_to_print_time: HashMap<usize, usize> = update
+// returns true if a change was required
+fn fix_update(update: &mut [usize], rules: &[(usize, usize)]) -> bool {
+    // rebuilds this hashmap with every element swap, but oh well, i'm lazy.
+    let page_to_index: HashMap<usize, usize> = update
         .iter()
         .enumerate()
         .map(|(t, page)| (*page, t))
         .collect();
 
     for (page_x, page_y) in rules {
-        let Some(page_x_time) = page_to_print_time.get(page_x) else {
+        let Some(page_x_index) = page_to_index.get(page_x) else {
             // page never printed, rule doesn't apply
             continue;
         };
 
-        let Some(page_y_time) = page_to_print_time.get(page_y) else {
+        let Some(page_y_index) = page_to_index.get(page_y) else {
             // page never printed, rule doesn't apply
             continue;
         };
 
-        if *page_x_time >= *page_y_time {
+        if *page_x_index >= *page_y_index {
             // x not printed before y, rule broken
-            return false;
+            // get slightly closely to an ok update by swapping the two
+            update.swap(*page_x_index, *page_y_index);
+            return true;
         }
     }
 
     // all rules obeyed
-    true
+    false
 }
 
 fn get_update_middle_page(update: &[usize]) -> usize {
@@ -77,14 +81,33 @@ fn main() -> Result<(), Error> {
     let rules = load_rules();
     let updates = load_updates();
 
-    let mut res = 0;
+    let mut good_updates = Vec::new();
+    let mut bad_updates = Vec::new();
 
-    for update in &updates {
-        if is_update_ok(update, &rules) {
-            res += get_update_middle_page(update);
+    for update in updates.into_iter() {
+        let mut copy = update.clone();
+        if fix_update(&mut copy, &rules) {
+            bad_updates.push(update);
+        } else {
+            good_updates.push(update)
         }
     }
 
-    println!("{res:?}");
+    let mut p1_res = 0;
+    for update in &good_updates {
+        p1_res += get_update_middle_page(update);
+    }
+
+    for update in &mut bad_updates {
+        while fix_update(update, &rules) {}
+    }
+
+    let mut p2_res = 0;
+    for update in &bad_updates {
+        p2_res += get_update_middle_page(update);
+    }
+
+    println!("p1 = {p1_res:?}");
+    println!("p2 = {p2_res:?}");
     Ok(())
 }
