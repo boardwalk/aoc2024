@@ -1,3 +1,4 @@
+#![feature(map_many_mut)]
 use anyhow::Error;
 use std::collections::HashMap;
 
@@ -42,34 +43,41 @@ fn load_updates() -> Vec<Vec<usize>> {
 
 // returns true if a change was required
 fn fix_update(update: &mut [usize], rules: &[(usize, usize)]) -> bool {
-    // rebuilds this hashmap with every element swap, but oh well, i'm lazy.
-    let page_to_index: HashMap<usize, usize> = update
+    let mut page_to_index: HashMap<usize, usize> = update
         .iter()
         .enumerate()
         .map(|(t, page)| (*page, t))
         .collect();
 
-    for (page_x, page_y) in rules {
-        let Some(page_x_index) = page_to_index.get(page_x) else {
-            // page never printed, rule doesn't apply
-            continue;
-        };
+    let mut changed = false;
 
-        let Some(page_y_index) = page_to_index.get(page_y) else {
-            // page never printed, rule doesn't apply
-            continue;
-        };
+    loop {
+        let mut changed_this_cycle = false;
 
-        if *page_x_index >= *page_y_index {
-            // x not printed before y, rule broken
-            // get slightly closely to an ok update by swapping the two
-            update.swap(*page_x_index, *page_y_index);
-            return true;
+        for (page_x, page_y) in rules {
+            let [Some(page_x_index), Some(page_y_index)] =
+                page_to_index.get_many_mut([page_x, page_y])
+            else {
+                continue;
+            };
+
+            if *page_x_index >= *page_y_index {
+                // x not printed before y, rule broken
+                // get slightly closely to an ok update by swapping the two
+                update.swap(*page_x_index, *page_y_index);
+                std::mem::swap(page_x_index, page_y_index);
+
+                changed = true;
+                changed_this_cycle = true;
+            }
+        }
+
+        if !changed_this_cycle {
+            break;
         }
     }
 
-    // all rules obeyed
-    false
+    changed
 }
 
 fn get_update_middle_page(update: &[usize]) -> usize {
@@ -99,7 +107,7 @@ fn main() -> Result<(), Error> {
     }
 
     for update in &mut bad_updates {
-        while fix_update(update, &rules) {}
+        fix_update(update, &rules);
     }
 
     let mut p2_res = 0;
