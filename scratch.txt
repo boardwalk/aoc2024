@@ -1,0 +1,9 @@
+7b wrong:
+(int impl of append)
+2060205113776
+(string impl of append)
+165278520438656
+(int impl w/ fixed invalid operand choice)
+165278151522644
+(another try with diff number of permutes)
+35184087314361

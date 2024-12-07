@@ -4,7 +4,9 @@ resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1"
+indicatif = { version = "0.17", features = ["rayon"] }
 ndarray = { version = "0.16", default-features = false }
 nom = "7"
+rayon = "1"
 regex = "1"
 tools = { path = "tools" }
