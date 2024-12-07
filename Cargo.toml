@@ -1,8 +1,10 @@
 [workspace]
-members = ["day*"]
+members = ["day*", "tools"]
 resolver = "2"
 
 [workspace.dependencies]
 anyhow = "1"
+ndarray = { version = "0.16", default-features = false }
 nom = "7"
 regex = "1"
+tools = { path = "tools" }
