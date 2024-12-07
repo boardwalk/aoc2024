@@ -1,57 +1,45 @@
 #![feature(iterator_try_collect)]
 use anyhow::{bail, Error};
 use indicatif::ProgressIterator as _;
+use num_bigint::BigUint;
 use rayon::prelude::*;
+use std::str::FromStr as _;
 
-#[derive(Debug)]
 struct Equation {
-    test_value: usize,
-    args: Vec<usize>,
+    test_value: BigUint,
+    args: Vec<BigUint>,
 }
 
-fn do_append_fast(mut res: usize, mut arg_val: usize) -> usize {
-    let mut digits = Vec::new();
-
-    while arg_val != 0 {
-        let digit = arg_val % 10;
-        arg_val /= 10;
-
-        digits.push(digit);
-    }
-
-    for digit in digits.iter().rev() {
-        res = res * 10 + *digit;
-    }
-
-    res
-}
-
-fn do_append_slow(res: usize, arg_val: usize) -> usize {
+fn do_append_slow(res: BigUint, arg_val: &BigUint) -> BigUint {
     let mut res_tmp = res.to_string();
     let arg_tmp = arg_val.to_string();
     res_tmp.push_str(&arg_tmp);
-    usize::from_str_radix(&res_tmp, 10).unwrap()
+
+    BigUint::from_str(&res_tmp).unwrap()
 }
 
-fn eval_equation(eqn: &Equation, mut permute_num: usize) -> Option<usize> {
-    let mut res = eqn.args[0];
+fn eval_equation(eqn: &Equation, mut permute_num: usize) -> Option<BigUint> {
+    let mut res = eqn.args[0].clone();
 
     for arg_val in eqn.args.iter().skip(1) {
-        let op_num = permute_num & 3;
+        let op_num = permute_num & 0b11;
         permute_num >>= 2;
 
         match op_num {
-            0 => {
-                res = res + *arg_val;
+            0b00 => {
+                res = res + arg_val;
             }
-            1 => {
-                res = res * *arg_val;
+            0b01 => {
+                res = res * arg_val;
             }
-            2 => {
-                // res = do_append_fast(res, *arg_val);
+            0b10 => {
+                res = do_append_slow(res, arg_val);
+            }
+            0b11 => {
+                return None;
             }
             _ => {
-                return None;
+                panic!("ack!");
             }
         }
     }
@@ -75,8 +63,6 @@ fn equation_satisfiable(eqn: &Equation) -> bool {
 }
 
 fn main() -> Result<(), Error> {
-    assert_eq!(do_append_slow(12, 345), 12345);
-    assert_eq!(do_append_fast(12, 345), 12345);
     let mut eqns = Vec::new();
 
     for ln in std::io::stdin().lines() {
@@ -87,24 +73,24 @@ fn main() -> Result<(), Error> {
             bail!("wrong number of tokens");
         };
 
-        let test_value = usize::from_str_radix(test_value, 10)?;
+        let test_value = BigUint::from_str(test_value)?;
 
         let args: Vec<_> = args
             .split_ascii_whitespace()
-            .map(|arg| usize::from_str_radix(arg, 10))
+            .map(BigUint::from_str)
             .try_collect()?;
 
-        eqns.push(Equation { test_value, args });
+        eqns.push(Equation {
+            test_value: test_value,
+            args,
+        });
     }
 
-    println!("{eqns:?}");
-
-    let mut sum = 0;
+    let mut sum = BigUint::ZERO;
 
     for eqn in eqns.iter().progress() {
-        // println!("testing eqn {eqn:?}");
         if equation_satisfiable(eqn) {
-            sum += eqn.test_value;
+            sum += &eqn.test_value;
         }
     }
 

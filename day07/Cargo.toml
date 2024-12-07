@@ -6,4 +6,5 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 indicatif = { workspace = true }
+num-bigint = { workspace = true }
 rayon = { workspace = true }
