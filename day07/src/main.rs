@@ -1,8 +1,9 @@
 #![feature(iterator_try_collect)]
 use anyhow::{bail, Error};
-use indicatif::ProgressIterator as _;
+use indicatif::ParallelProgressIterator as _;
 use num_bigint::BigUint;
 use rayon::prelude::*;
+use std::fmt::Write as _;
 use std::str::FromStr as _;
 
 struct Equation {
@@ -10,56 +11,33 @@ struct Equation {
     args: Vec<BigUint>,
 }
 
-fn do_append_slow(res: BigUint, arg_val: &BigUint) -> BigUint {
-    let mut res_tmp = res.to_string();
-    let arg_tmp = arg_val.to_string();
-    res_tmp.push_str(&arg_tmp);
-
-    BigUint::from_str(&res_tmp).unwrap()
+fn do_add(lhs: &BigUint, rhs: &BigUint) -> BigUint {
+    lhs + rhs
 }
 
-fn eval_equation(eqn: &Equation, mut permute_num: usize) -> Option<BigUint> {
-    let mut res = eqn.args[0].clone();
+fn do_mul(lhs: &BigUint, rhs: &BigUint) -> BigUint {
+    lhs * rhs
+}
 
-    for arg_val in eqn.args.iter().skip(1) {
-        let op_num = permute_num & 0b11;
-        permute_num >>= 2;
+fn do_append(lhs: &BigUint, rhs: &BigUint) -> BigUint {
+    let mut res = lhs.to_string();
+    write!(&mut res, "{}", rhs).unwrap();
+    BigUint::from_str(&res).unwrap()
+}
 
-        match op_num {
-            0b00 => {
-                res = res + arg_val;
-            }
-            0b01 => {
-                res = res * arg_val;
-            }
-            0b10 => {
-                res = do_append_slow(res, arg_val);
-            }
-            0b11 => {
-                return None;
-            }
-            _ => {
-                panic!("ack!");
-            }
-        }
+fn eval_equation(eqn: &Equation, cur_sum: BigUint, next_arg: usize) -> bool {
+    if next_arg >= eqn.args.len() {
+        // no more args to process, check sum
+        return cur_sum == eqn.test_value;
     }
 
-    Some(res)
+    eval_equation(eqn, do_add(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
+        || eval_equation(eqn, do_mul(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
+        || eval_equation(eqn, do_append(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
 }
 
 fn equation_satisfiable(eqn: &Equation) -> bool {
-    let num_permutes = 1 << (2 * (eqn.args.len() - 1));
-
-    (0..num_permutes)
-        .into_par_iter()
-        .find_any(|permute_num| {
-            let Some(val) = eval_equation(eqn, *permute_num) else {
-                return false;
-            };
-
-            val == eqn.test_value
-        })
-        .is_some()
+    eval_equation(eqn, eqn.args[0].clone(), 1)
 }
 
 fn main() -> Result<(), Error> {
@@ -86,15 +64,19 @@ fn main() -> Result<(), Error> {
         });
     }
 
+    let eqns: Vec<_> = eqns
+        .into_par_iter()
+        .progress()
+        .filter(|eqn| equation_satisfiable(eqn))
+        .collect();
+
     let mut sum = BigUint::ZERO;
 
-    for eqn in eqns.iter().progress() {
-        if equation_satisfiable(eqn) {
-            sum += &eqn.test_value;
-        }
+    for eq in &eqns {
+        sum = sum + &eq.test_value;
     }
 
-    println!("{sum}");
+    println!("sum: {}", sum);
 
     Ok(())
 }
