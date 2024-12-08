@@ -1,39 +1,38 @@
 #![feature(iterator_try_collect)]
 use anyhow::{bail, Error};
 use indicatif::ParallelProgressIterator as _;
-use num_bigint::BigUint;
 use rayon::prelude::*;
 use std::fmt::Write as _;
 use std::str::FromStr as _;
 
 struct Equation {
-    test_value: BigUint,
-    args: Vec<BigUint>,
+    test_value: usize,
+    args: Vec<usize>,
 }
 
-fn do_add(lhs: &BigUint, rhs: &BigUint) -> BigUint {
-    lhs + rhs
+fn do_add(lhs: usize, rhs: usize) -> usize {
+    lhs.checked_add(rhs).unwrap()
 }
 
-fn do_mul(lhs: &BigUint, rhs: &BigUint) -> BigUint {
-    lhs * rhs
+fn do_mul(lhs: usize, rhs: usize) -> usize {
+    lhs.checked_mul(rhs).unwrap()
 }
 
-fn do_append(lhs: &BigUint, rhs: &BigUint) -> BigUint {
+fn do_append(lhs: usize, rhs: usize) -> usize {
     let mut res = lhs.to_string();
     write!(&mut res, "{}", rhs).unwrap();
-    BigUint::from_str(&res).unwrap()
+    usize::from_str(&res).unwrap()
 }
 
-fn eval_equation(eqn: &Equation, cur_sum: BigUint, next_arg: usize) -> bool {
+fn eval_equation(eqn: &Equation, cur_sum: usize, next_arg: usize) -> bool {
     if next_arg >= eqn.args.len() {
         // no more args to process, check sum
         return cur_sum == eqn.test_value;
     }
 
-    eval_equation(eqn, do_add(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
-        || eval_equation(eqn, do_mul(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
-        || eval_equation(eqn, do_append(&cur_sum, &eqn.args[next_arg]), next_arg + 1)
+    eval_equation(eqn, do_add(cur_sum, eqn.args[next_arg]), next_arg + 1)
+        || eval_equation(eqn, do_mul(cur_sum, eqn.args[next_arg]), next_arg + 1)
+        || eval_equation(eqn, do_append(cur_sum, eqn.args[next_arg]), next_arg + 1)
 }
 
 fn equation_satisfiable(eqn: &Equation) -> bool {
@@ -51,11 +50,11 @@ fn main() -> Result<(), Error> {
             bail!("wrong number of tokens");
         };
 
-        let test_value = BigUint::from_str(test_value)?;
+        let test_value = usize::from_str(test_value)?;
 
         let args: Vec<_> = args
             .split_ascii_whitespace()
-            .map(BigUint::from_str)
+            .map(usize::from_str)
             .try_collect()?;
 
         eqns.push(Equation {
@@ -70,10 +69,10 @@ fn main() -> Result<(), Error> {
         .filter(|eqn| equation_satisfiable(eqn))
         .collect();
 
-    let mut sum = BigUint::ZERO;
+    let mut sum = 0usize;
 
     for eq in &eqns {
-        sum = sum + &eq.test_value;
+        sum = sum.checked_add(eq.test_value).unwrap();
     }
 
     println!("sum: {}", sum);
