@@ -34,8 +34,14 @@ pub fn load_grid(rd: impl std::io::BufRead) -> Result<Array2<char>, Error> {
 
     for ln in rd.lines() {
         let ln = ln?;
-        grid_shape.add_row(ln.len())?;
-        data.extend(ln.chars());
+
+        let mut col_count = 0;
+        for ch in ln.chars() {
+            data.push(ch);
+            col_count += 1;
+        }
+
+        grid_shape.add_row(col_count)?;
     }
 
     let shape = grid_shape.calc()?;
