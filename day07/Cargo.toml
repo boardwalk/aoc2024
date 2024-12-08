@@ -5,5 +5,3 @@ edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
-indicatif = { workspace = true }
-rayon = { workspace = true }

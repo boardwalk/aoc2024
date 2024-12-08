@@ -1,7 +1,5 @@
 #![feature(iterator_try_collect)]
 use anyhow::{bail, Error};
-use indicatif::ParallelProgressIterator as _;
-use rayon::prelude::*;
 use std::fmt::Write as _;
 use std::str::FromStr as _;
 
@@ -64,8 +62,7 @@ fn main() -> Result<(), Error> {
     }
 
     let eqns: Vec<_> = eqns
-        .into_par_iter()
-        .progress()
+        .into_iter()
         .filter(|eqn| equation_satisfiable(eqn))
         .collect();
 
