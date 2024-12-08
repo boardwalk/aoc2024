@@ -9,36 +9,6 @@ type AntiNodes = HashSet<(usize, usize)>;
 
 const PART_TWO: bool = true;
 
-// the slope of some line from point a to point b
-struct Slope {
-    dr: i64,
-    dc: i64,
-}
-
-impl Slope {
-    fn reduce(&mut self) {
-        // negatives for both cancel out
-        if self.dr < 0 && self.dc < 0 {
-            self.dr = -self.dr;
-            self.dc = -self.dc;
-        }
-
-        let is_neg = self.dr < 0 || self.dc < 0;
-
-        self.dr = self.dr.abs();
-        self.dc = self.dc.abs();
-
-        while self.dr % 2 == 0 && self.dc % 2 == 0 {
-            self.dr >>= 1;
-            self.dc >>= 1;
-        }
-
-        if is_neg {
-            self.dr = -self.dr;
-        }
-    }
-}
-
 fn find_antennas(grid: &ndarray::Array2<char>) -> Antennas {
     let mut antennas: Antennas = HashMap::new();
     for ((row, col), freq) in grid.indexed_iter() {
@@ -106,24 +76,20 @@ fn find_anti_nodes_p2(
     let a1 = coord_to_signed(a1);
     let a2 = coord_to_signed(a2);
 
-    let mut s = Slope {
-        dr: a2.0 - a1.0,
-        dc: a2.1 - a1.1,
-    };
-
-    s.reduce();
+    let dr = a2.0 - a1.0;
+    let dc = a2.1 - a1.1;
 
     let mut r = a1.0;
     let mut c = a1.1;
 
     loop {
         let Some(n) = bound_check_coord((r, c), grid) else {
-            return;
+            break;
         };
         anti_nodes.insert(n);
 
-        r += s.dr;
-        c += s.dc;
+        r += dr;
+        c += dc;
     }
 }
 
