@@ -4,13 +4,13 @@ use anyhow::{anyhow, Error};
 use std::io::Read as _;
 
 #[derive(Debug, Hash)]
-struct Block {
+struct File {
     file_id: usize,
-    file_block: usize,
+    length: usize,
     disk_block: usize,
 }
 
-fn parse_disk_map(disk_map: &str) -> Result<Vec<Block>, Error> {
+fn parse_disk_map(disk_map: &str) -> Result<Vec<File>, Error> {
     let mut blocks = Vec::new();
     let mut disk_block = 0;
     let mut file_id = 0;
@@ -23,16 +23,13 @@ fn parse_disk_map(disk_map: &str) -> Result<Vec<Block>, Error> {
         let length = length.to_digit(10).ok_or_else(|| anyhow!("invalid used"))?;
         let length = usize::try_from(length)?;
 
-        for file_block in 0..length {
-            blocks.push(Block {
-                file_id,
-                file_block,
-                disk_block,
-            });
+        blocks.push(File {
+            file_id,
+            length,
+            disk_block,
+        });
 
-            disk_block += 1;
-        }
-
+        disk_block += length;
         file_id += 1;
         let Some(free) = map_it.next() else {
             break;
@@ -46,11 +43,14 @@ fn parse_disk_map(disk_map: &str) -> Result<Vec<Block>, Error> {
     Ok(blocks)
 }
 
-fn find_free_block(blocks: &[Block]) -> Option<usize> {
-    for [a, b] in blocks.array_windows() {
-        let dist = b.disk_block - a.disk_block;
-        if dist > 1 {
-            return Some(a.disk_block + 1);
+fn find_contig_free_of_size(files: &[File], len: usize) -> Option<usize> {
+    for [a, b] in files.array_windows() {
+        let a_end = a.disk_block + a.length;
+        let b_begin = b.disk_block;
+        let num_free = b_begin - a_end;
+
+        if num_free >= len {
+            return Some(a_end);
         }
     }
 
@@ -61,25 +61,38 @@ fn main() -> Result<(), Error> {
     let mut disk_map = String::new();
     std::io::stdin().read_to_string(&mut disk_map)?;
 
-    let mut blocks = parse_disk_map(&disk_map)?;
+    let mut files = parse_disk_map(&disk_map)?;
     // kept in disk_block order
+    for file_id in (0..files.len()).rev() {
+        let idx = files
+            .iter()
+            .position(|file| file.file_id == file_id)
+            .unwrap();
+        let Some(free_block) = find_contig_free_of_size(&files, files[idx].length) else {
+            continue;
+        };
 
-    while let Some(free_block) = find_free_block(&blocks) {
-        let last_block = blocks.last_mut().unwrap();
-        // println!("moving {} to {}", last_block.disk_block, free_block);
-        last_block.disk_block = free_block;
-        blocks.sort_by_key(|block| block.disk_block);
+        if free_block >= files[idx].disk_block {
+            // we only move files left
+            continue;
+        }
+
+        println!(
+            "moving {} from {} to {}",
+            file_id, files[idx].disk_block, free_block
+        );
+        files[idx].disk_block = free_block;
+        files.sort_by_key(|block| block.disk_block);
     }
 
     let mut sum = 0;
 
-    for block in &blocks {
-        sum += block.disk_block * block.file_id
+    for file in &files {
+        for file_block in 0..file.length {
+            sum += (file.disk_block + file_block) * file.file_id
+        }
     }
 
     println!("{sum}");
-
-    // println!("{blocks:#?}");
-
     Ok(())
 }
