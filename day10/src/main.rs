@@ -25,37 +25,47 @@ fn shift(heights: &Array2<char>, pos: (usize, usize), dr: i64, dc: i64) -> Optio
     }
 }
 
+const PART_TWO: bool = false;
+
 const DELTAS: &[(i64, i64)] = &[(0, 1), (0, -1), (-1, 0), (1, 0)];
+
+struct Work {
+    pos: (usize, usize),
+}
 
 fn eval_trailhead(heights: &Array2<char>, start: (usize, usize)) -> Result<usize, Error> {
     let mut seen: Array2<bool> = Array2::default(heights.raw_dim());
-    let mut work = Vec::new();
-    work.push(start);
+    let mut work_queue = Vec::new();
+    work_queue.push(Work { pos: start });
 
-    while let Some(pos) = work.pop() {
-        seen[pos] = true;
-        let height = get_height(heights, pos)?;
+    while let Some(work) = work_queue.pop() {
+        seen[work.pos] = true;
+        let height = get_height(heights, work.pos)?;
         for (dr, dc) in DELTAS {
-            let Some(new_pos) = shift(heights, pos, *dr, *dc) else {
+            let Some(new_pos) = shift(heights, work.pos, *dr, *dc) else {
                 continue;
             };
 
             let new_height = get_height(heights, new_pos)?;
 
             if !seen[new_pos] && new_height == height + 1 {
-                work.push(new_pos);
+                work_queue.push(Work { pos: new_pos });
             }
         }
     }
 
-    let mut score = 0;
-    for (pos, val) in heights.indexed_iter() {
-        if *val == '9' && seen[pos] {
-            score += 1;
+    if PART_TWO {
+        Ok(0)
+    } else {
+        let mut score = 0;
+        for (pos, val) in heights.indexed_iter() {
+            if *val == '9' && seen[pos] {
+                score += 1;
+            }
         }
-    }
 
-    Ok(score)
+        Ok(score)
+    }
 }
 
 fn main() -> Result<(), Error> {
