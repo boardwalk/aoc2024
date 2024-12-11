@@ -5,23 +5,17 @@ use std::collections::HashMap;
 use std::io::Read as _;
 use std::str::FromStr as _;
 
+const PART_TWO: bool = true;
+
 pub struct Pebble {
     num: usize,
     count: usize,
 }
 
 fn split_num(val: usize) -> Option<(usize, usize)> {
-    let mut tmp_val = val;
-    let mut num_digits = 0;
-    while tmp_val > 0 {
-        tmp_val /= 10;
-        num_digits += 1;
-    }
-
-    if num_digits % 2 == 0 {
-        let str_val = val.to_string();
-        assert_eq!(str_val.len(), num_digits);
-        let (left, right) = str_val.split_at(num_digits / 2);
+    let str_val = val.to_string();
+    if str_val.len() % 2 == 0 {
+        let (left, right) = str_val.split_at(str_val.len() / 2);
         let left = usize::from_str(left).unwrap();
         let right = usize::from_str(right).unwrap();
         Some((left, right))
@@ -65,7 +59,8 @@ fn main() -> Result<(), Error> {
         })
         .collect();
 
-    for _i in 0..75 {
+    let num_iters = if PART_TWO { 75 } else { 25 };
+    for _i in 0..num_iters {
         let mut new_pebbles = Vec::new();
 
         for pebble in &pebbles {
