@@ -102,7 +102,9 @@ fn main() -> Result<(), Error> {
     let mut total = 0usize;
 
     for pebble in &pebbles {
-        total = total.checked_add(pebble.count).unwrap();
+        total = total
+            .checked_add(pebble.count)
+            .ok_or_else(|| anyhow!("bad add"))?;
     }
 
     println!("total = {total}");
