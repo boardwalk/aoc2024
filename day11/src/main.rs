@@ -1,33 +1,50 @@
 #![feature(iterator_try_collect)]
 
-use anyhow::Error;
+use anyhow::{anyhow, Error};
+use std::collections::HashMap;
 use std::io::Read as _;
 use std::str::FromStr as _;
 
-fn split_num(num: usize) -> Option<(usize, usize)> {
-    let num = num.to_string();
-
-    if num.len() % 2 != 0 {
-        return None;
-    }
-    let (left, right) = num.split_at(num.len() / 2);
-    let left = usize::from_str(left).unwrap();
-    let right = usize::from_str(right).unwrap();
-    Some((left, right))
+pub struct Pebble {
+    num: usize,
+    count: usize,
 }
 
-fn handle_stone(num: usize, out: &mut Vec<usize>) {
-    if num == 0 {
-        // rule 0
-        out.push(1);
-    } else if let Some((left, right)) = split_num(num) {
-        out.push(left);
-        out.push(right);
-        // rule 1
-    } else {
-        // rule 2
-        out.push(num * 2024);
+fn split_num(val: usize) -> Option<(usize, usize)> {
+    let mut tmp_val = val;
+    let mut num_digits = 0;
+    while tmp_val > 0 {
+        tmp_val /= 10;
+        num_digits += 1;
     }
+
+    if num_digits % 2 == 0 {
+        let str_val = val.to_string();
+        assert_eq!(str_val.len(), num_digits);
+        let (left, right) = str_val.split_at(num_digits / 2);
+        let left = usize::from_str(left).unwrap();
+        let right = usize::from_str(right).unwrap();
+        Some((left, right))
+    } else {
+        None
+    }
+}
+
+fn compress(pebbles: &[Pebble]) -> Vec<Pebble> {
+    let mut num_to_count: HashMap<usize, usize> = HashMap::new();
+
+    for pebble in pebbles {
+        let count = num_to_count.entry(pebble.num).or_default();
+        *count += pebble.count;
+    }
+
+    num_to_count
+        .iter()
+        .map(|(num, count)| Pebble {
+            num: *num,
+            count: *count,
+        })
+        .collect()
 }
 
 fn main() -> Result<(), Error> {
@@ -35,20 +52,60 @@ fn main() -> Result<(), Error> {
 
     std::io::stdin().read_to_string(&mut buf)?;
 
-    let mut stones: Vec<usize> = buf
+    let input: Vec<usize> = buf
         .split_ascii_whitespace()
         .map(usize::from_str)
         .try_collect()?;
 
-    for i in 0..25 {
-        let mut new_stones = Vec::with_capacity(stones.len());
+    let mut pebbles: Vec<Pebble> = input
+        .iter()
+        .map(|num| Pebble {
+            num: *num,
+            count: 1,
+        })
+        .collect();
 
-        for num in &stones {
-            handle_stone(*num, &mut new_stones);
+    for _i in 0..75 {
+        let mut new_pebbles = Vec::new();
+
+        for pebble in &pebbles {
+            if pebble.num == 0 {
+                // rule 0
+                new_pebbles.push(Pebble {
+                    num: 1,
+                    count: pebble.count,
+                });
+            } else if let Some((left, right)) = split_num(pebble.num) {
+                // rule 1
+                new_pebbles.push(Pebble {
+                    num: left,
+                    count: pebble.count,
+                });
+                new_pebbles.push(Pebble {
+                    num: right,
+                    count: pebble.count,
+                });
+            } else {
+                // rule 2
+                let num = pebble
+                    .num
+                    .checked_mul(2024)
+                    .ok_or_else(|| anyhow!("bad mul"))?;
+                let count = pebble.count;
+                new_pebbles.push(Pebble { num, count });
+            }
         }
-        stones = new_stones;
-        println!("{} after {}", stones.len(), i);
+
+        pebbles = compress(&new_pebbles);
     }
+
+    let mut total = 0usize;
+
+    for pebble in &pebbles {
+        total = total.checked_add(pebble.count).unwrap();
+    }
+
+    println!("total = {total}");
 
     Ok(())
 }
