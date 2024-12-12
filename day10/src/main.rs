@@ -12,24 +12,7 @@ fn get_height(heights: &Array2<char>, pos: (usize, usize)) -> Result<usize, Erro
     Ok(height)
 }
 
-fn shift(heights: &Array2<char>, pos: (usize, usize), dr: i64, dc: i64) -> Option<(usize, usize)> {
-    let row = i64::try_from(pos.0).ok()?;
-    let col = i64::try_from(pos.1).ok()?;
-    let row = row.checked_add(dr)?;
-    let col = col.checked_add(dc)?;
-    let row = usize::try_from(row).ok()?;
-    let col = usize::try_from(col).ok()?;
-
-    if row < heights.dim().0 && col < heights.dim().1 {
-        Some((row, col))
-    } else {
-        None
-    }
-}
-
 const PART_TWO: bool = true;
-
-const DELTAS: &[(i64, i64)] = &[(0, 1), (0, -1), (-1, 0), (1, 0)];
 
 struct Work {
     pos: (usize, usize),
@@ -58,8 +41,8 @@ fn eval_trailhead(heights: &Array2<char>, pos: (usize, usize)) -> Result<usize, 
             paths.insert(work.path.clone());
         }
 
-        for (dir_idx, (dr, dc)) in DELTAS.iter().enumerate() {
-            let Some(pos) = shift(heights, work.pos, *dr, *dc) else {
+        for (dir_idx, (dr, dc)) in tools::DELTAS.iter().enumerate() {
+            let Some(pos) = tools::shift(heights, work.pos, *dr, *dc) else {
                 continue;
             };
 
