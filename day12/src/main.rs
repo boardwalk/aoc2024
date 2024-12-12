@@ -1,6 +1,8 @@
 use anyhow::Error;
 use ndarray::Array2;
 
+const PART_TWO: bool = false;
+
 struct EvalResult {
     area: usize,
     perimeter: usize,
@@ -24,13 +26,13 @@ fn eval_region(plots: &Array2<char>, seen: &mut Array2<bool>, start: (usize, usi
         area += 1;
 
         for (dr, dc) in tools::DELTAS {
-            let Some(pos) = tools::shift(plots, pos, *dr, *dc) else {
+            let Some(new_pos) = tools::shift(plots, pos, *dr, *dc) else {
                 continue;
             };
 
-            if plots[pos] == region_plant {
+            if plots[new_pos] == region_plant {
                 perimeter -= 1;
-                work.push(pos);
+                work.push(new_pos);
             }
         }
     }
