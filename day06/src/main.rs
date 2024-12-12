@@ -60,6 +60,7 @@ fn get(grid: &Grid, row: i64, col: i64) -> Option<char> {
     Some(*ch)
 }
 
+#[allow(unused)]
 #[derive(Debug)]
 enum EvalResult {
     Looped,
