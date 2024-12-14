@@ -1,0 +1,4 @@
+part1 initial
+total_cost = 18964
+fixed iteration counts
+27157

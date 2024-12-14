@@ -7,3 +7,4 @@ edition = "2021"
 ndarray = { workspace = true }
 anyhow = { workspace = true }
 tools = { workspace = true }
+regex = { workspace = true }
