@@ -8,31 +8,35 @@ struct EvalResult {
     perimeter: usize,
 }
 
+struct Work {
+    pos: (usize, usize),
+}
+
 fn eval_region(plots: &Array2<char>, seen: &mut Array2<bool>, start: (usize, usize)) -> EvalResult {
     let region_plant = plots[start];
-    let mut work: Vec<(usize, usize)> = Vec::new();
-    work.push(start);
+    let mut queue: Vec<Work> = Vec::new();
+    queue.push(Work { pos: start });
 
     let mut area = 0;
     let mut perimeter = 0;
 
-    while let Some(pos) = work.pop() {
-        if seen[pos] {
+    while let Some(work) = queue.pop() {
+        if seen[work.pos] {
             continue;
         }
         perimeter += 4;
 
-        seen[pos] = true;
+        seen[work.pos] = true;
         area += 1;
 
         for (dr, dc) in tools::DELTAS {
-            let Some(new_pos) = tools::shift(plots, pos, *dr, *dc) else {
+            let Some(new_pos) = tools::shift(plots, work.pos, *dr, *dc) else {
                 continue;
             };
 
             if plots[new_pos] == region_plant {
                 perimeter -= 1;
-                work.push(new_pos);
+                queue.push(Work { pos: new_pos });
             }
         }
     }
