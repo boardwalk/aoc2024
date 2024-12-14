@@ -1,0 +1,129 @@
+use anyhow::{anyhow, Error};
+use ndarray::Array2;
+
+const PART_TWO: bool = false;
+
+struct EvalResult {
+    area: usize,
+    perimeter: usize,
+}
+
+enum EvalMoveResult {
+    TurnLeft,
+    TurnRight,
+    Proceed,
+}
+
+#[derive(Clone, Copy)]
+enum Facing {
+    Up,
+    Down,
+    Left,
+    Right,
+}
+
+impl Facing {
+    fn to_delta(self) -> (i64, i64) {
+        match self {
+            Facing::Up => (-1, 0),
+            Facing::Down => (1, 0),
+            Facing::Left => (0, -1),
+            Facing::Right => (0, 1),
+        }
+    }
+}
+
+fn get_new_facing(old_facing: Facing, emr: EvalMoveResult) -> Facing {
+    match (old_facing, emr) {
+        (Facing::Up, EvalMoveResult::TurnLeft) => Facing::Left,
+        (Facing::Up, EvalMoveResult::TurnRight) => Facing::Right,
+        (Facing::Down, EvalMoveResult::TurnLeft) => Facing::Right,
+        (Facing::Down, EvalMoveResult::TurnRight) => Facing::Left,
+        (Facing::Left, EvalMoveResult::TurnLeft) => Facing::Down,
+        (Facing::Left, EvalMoveResult::TurnRight) => Facing::Up,
+        (Facing::Right, EvalMoveResult::TurnLeft) => Facing::Up,
+        (Facing::Right, EvalMoveResult::TurnRight) => Facing::Down,
+        (_, EvalMoveResult::Proceed) => old_facing,
+    }
+}
+
+fn advance_pos((row, col): (i64, i64), facing: Facing) -> Result<(i64, i64), Error> {
+    let (dr, dc) = facing.to_delta();
+    let row = row.checked_add(dr).ok_or_else(|| anyhow!("bad row"))?;
+    let col = col.checked_add(dc).ok_or_else(|| anyhow!("bad col"))?;
+    Ok((row, col))
+}
+
+fn eval_move(
+    plots: &Array2<char>,
+    start: (i64, i64),
+    cur_pos: (i64, i64),
+    new_pos: (i64, i64),
+) -> Result<EvalMoveResult, Error> {
+    let plant = plots[to_unsigned(start)?];
+
+    // need to check a few things here:
+    // if new_pos out of bounds, need to turn left or right before proceeding
+    // if new_pos is on different plant, ditto
+    // else ok to proceed
+
+    Ok(EvalMoveResult::Proceed)
+}
+
+fn to_unsigned((row, col): (i64, i64)) -> Result<(usize, usize), Error> {
+    let row = usize::try_from(row)?;
+    let col = usize::try_from(col)?;
+    Ok((row, col))
+}
+
+fn walk_fence(
+    plots: &Array2<char>,
+    seen: &mut Array2<bool>,
+    start: (i64, i64),
+) -> Result<EvalResult, Error> {
+    let mut cur_pos = start;
+    let mut facing = Facing::Right; // arbitrary, doesn't matter
+    let mut area = 0;
+    let mut perimeter = 0;
+
+    loop {
+        let new_pos = advance_pos(cur_pos, facing)?;
+
+        match eval_move(plots, start, cur_pos, new_pos)? {
+            EvalMoveResult::TurnLeft => {
+                facing = get_new_facing(facing, EvalMoveResult::TurnLeft);
+            }
+            EvalMoveResult::TurnRight => {
+                facing = get_new_facing(facing, EvalMoveResult::TurnRight);
+            }
+            EvalMoveResult::Proceed => {
+                // if cycle, all done
+                if new_pos == start {
+                    return Ok(EvalResult { area, perimeter });
+                }
+                // else accept new_pos
+                cur_pos = new_pos;
+                seen[to_unsigned(cur_pos)?] = true;
+            }
+        }
+    }
+}
+
+fn main() -> Result<(), Error> {
+    let plots = tools::load_grid(std::io::stdin().lock())?;
+    let mut seen: Array2<bool> = Array2::default(plots.raw_dim());
+    let mut total_cost = 0;
+
+    for ((row, col), _plant) in plots.indexed_iter() {
+        if !seen[(row, col)] {
+            let row = i64::try_from(row)?;
+            let col = i64::try_from(col)?;
+            let result = walk_fence(&plots, &mut seen, (row, col))?;
+
+            total_cost += result.area * result.perimeter;
+        }
+    }
+
+    println!("{total_cost}");
+    Ok(())
+}

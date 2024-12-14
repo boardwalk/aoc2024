@@ -1,0 +1,169 @@
+use anyhow::Error;
+use ndarray::Array2;
+use std::collections::HashSet;
+
+const PART_TWO: bool = false;
+
+#[derive(Debug)]
+struct EvalResult {
+    area: usize,
+    perimeter: usize,
+}
+
+fn fill_region(
+    plots: &Array2<char>,
+    seen: &mut Array2<bool>,
+    regions: &mut Array2<usize>,
+    start: (usize, usize),
+    region_id: usize,
+) {
+    let region_plant = plots[start];
+    let mut work: Vec<(usize, usize)> = Vec::new();
+    work.push(start);
+
+    while let Some(pos) = work.pop() {
+        if seen[pos] {
+            continue;
+        }
+
+        seen[pos] = true;
+        regions[pos] = region_id;
+
+        for (dr, dc) in tools::DELTAS {
+            let Some(new_pos) = tools::shift(plots, pos, *dr, *dc) else {
+                continue;
+            };
+
+            if plots[new_pos] == region_plant {
+                work.push(new_pos);
+            }
+        }
+    }
+}
+
+// is pos adjacent to region region_id
+// if true, you can move to pos and remain "in orbit" around the region
+fn is_adjacent(regions: &Array2<usize>, region_id: usize, pos: (i64, i64)) -> bool {
+    for dr in [0] {
+        for dc in [0] {
+            let row = pos.0 + dr;
+            let col = pos.1 + dc;
+            let Some(row) = usize::try_from(row).ok() else {
+                continue;
+            };
+
+            let Some(col) = usize::try_from(col).ok() else {
+                continue;
+            };
+            let Some(rgn) = regions.get((row, col)) else {
+                continue;
+            };
+
+            if *rgn == region_id {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+fn eval_region(
+    plots: &Array2<char>,
+    regions: &Array2<usize>,
+    region_id: usize,
+    region_start: (i64, i64),
+) -> EvalResult {
+    let mut cur_pos = region_start;
+    let mut area = 0;
+    let mut perimeter = 4;
+    let mut seen: HashSet<(i64, i64)> = HashSet::new();
+    let mut cur_dir = tools::DELTAS.iter().cycle().peekable();
+    let mut try_num = 0;
+
+    let mut orbit_trace = plots.clone();
+    orbit_trace[to_unsigned(cur_pos).unwrap()] = '#';
+
+    println!("region start is {region_start:?}");
+
+    loop {
+        try_num += 1;
+        // if we've looped too many times since moving, something is wrong
+        if try_num > 10 {
+            panic!("ack!");
+        }
+
+        let (dr, dc) = cur_dir.peek().unwrap();
+
+        let new_pos = (cur_pos.0 + dr, cur_pos.1 + dc);
+        if seen.contains(&new_pos) || !is_adjacent(regions, region_id, new_pos) {
+            // we've already been here or can't move in this direction, try changing direction
+            cur_dir.next();
+            println!("turned to {:?}", cur_dir.peek().unwrap());
+            continue;
+        }
+
+        cur_pos = new_pos;
+        // area += 1;
+        perimeter += 1;
+        seen.insert(cur_pos);
+        println!("got to new pos {:?}", new_pos);
+        try_num = 0;
+        orbit_trace[to_unsigned(cur_pos).unwrap()] = '#';
+        println!("{orbit_trace:?}");
+
+        if cur_pos == region_start {
+            break;
+        }
+    }
+
+    EvalResult { area, perimeter }
+}
+
+fn to_signed((row, col): (usize, usize)) -> Result<(i64, i64), Error> {
+    let row = i64::try_from(row)?;
+    let col = i64::try_from(col)?;
+    Ok((row, col))
+}
+
+fn to_unsigned((row, col): (i64, i64)) -> Result<(usize, usize), Error> {
+    let row = usize::try_from(row)?;
+    let col = usize::try_from(col)?;
+    Ok((row, col))
+}
+
+fn main() -> Result<(), Error> {
+    let plots = tools::load_grid(std::io::stdin().lock())?;
+
+    let mut seen: Array2<bool> = Array2::default(plots.raw_dim());
+    let mut regions: Array2<usize> = Array2::default(plots.raw_dim());
+    let mut next_region_id = 0;
+
+    let mut region_starts: Vec<(usize, usize)> = Vec::new();
+
+    for (start, _plant) in plots.indexed_iter() {
+        if !seen[start] {
+            let region_id = next_region_id;
+            next_region_id += 1;
+            fill_region(&plots, &mut seen, &mut regions, start, region_id);
+            region_starts.push(start);
+        }
+    }
+
+    let mut total_cost = 0;
+
+    for (region_id, region_start) in region_starts.iter().enumerate().take(2) {
+        let mut region_start = to_signed(*region_start)?;
+        // region_start.0 -= 1; // don't start directly on top of the region
+
+        println!("working on region {}", plots[region_starts[region_id]]);
+        let result = eval_region(&plots, &regions, region_id, region_start);
+        println!(
+            "eval region {} to be {:?}",
+            plots[region_starts[region_id]], result
+        );
+        total_cost += result.area * result.perimeter;
+    }
+
+    println!("{total_cost}");
+    Ok(())
+}
