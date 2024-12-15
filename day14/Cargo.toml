@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ndarray = { workspace = true }
 anyhow = { workspace = true }
-tools = { workspace = true }
+ndarray = { workspace = true }
 regex = { workspace = true }
+tools = { workspace = true }
