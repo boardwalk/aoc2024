@@ -1,7 +1,7 @@
 use anyhow::{anyhow, bail, Error};
 use ndarray::Array2;
 
-const PART_TWO: bool = true;
+const PART_TWO: bool = false;
 
 fn find_bot(grid: &Array2<char>) -> Option<(usize, usize)> {
     grid.indexed_iter()
@@ -18,7 +18,7 @@ fn instr_to_delta(instr: char) -> Result<(i64, i64), Error> {
     }
 }
 
-fn push_box(
+fn push_box_p1(
     grid: &mut Array2<char>,
     pos: (usize, usize),
     (dr, dc): (i64, i64),
@@ -53,7 +53,15 @@ fn push_box(
     Ok(true)
 }
 
-fn do_delta_p1(
+fn push_box_p2(
+    grid: &mut Array2<char>,
+    pos: (usize, usize),
+    (dr, dc): (i64, i64),
+) -> Result<bool, Error> {
+    todo!()
+}
+
+fn do_delta(
     grid: &mut Array2<char>,
     cur_pos: &mut (usize, usize),
     (dr, dc): (i64, i64),
@@ -72,8 +80,12 @@ fn do_delta_p1(
             *cur_pos = new_pos;
         }
         'O' => {
-            // if we're pushing into a box, try that
-            if push_box(grid, new_pos, (dr, dc))? {
+            if push_box_p1(grid, new_pos, (dr, dc))? {
+                *cur_pos = new_pos;
+            }
+        }
+        '[' | ']' => {
+            if push_box_p2(grid, new_pos, (dr, dc))? {
                 *cur_pos = new_pos;
             }
         }
@@ -83,26 +95,6 @@ fn do_delta_p1(
     }
     grid[*cur_pos] = '@';
     Ok(())
-}
-
-fn do_delta_p2(
-    grid: &mut Array2<char>,
-    cur_pos: &mut (usize, usize),
-    (dr, dc): (i64, i64),
-) -> Result<(), Error> {
-    // todo!()
-    Ok(())
-}
-
-fn calc_gps_sum_p1(grid: &Array2<char>) -> usize {
-    let mut gps_sum = 0;
-    for (pos, ch) in grid.indexed_iter() {
-        if *ch == 'O' {
-            gps_sum += 100 * pos.0 + pos.1;
-        }
-    }
-
-    gps_sum
 }
 
 // given position of right edge of box
@@ -115,22 +107,30 @@ fn dist_from_right(grid: &Array2<char>, pos: (usize, usize)) -> usize {
     grid.dim().1 - pos.1
 }
 
-fn calc_gps_sum_p2(grid: &Array2<char>) -> usize {
+fn calc_gps_sum(grid: &Array2<char>) -> Result<usize, Error> {
     let mut in_box = false;
     let mut gps_sum = 0;
     for (pos, ch) in grid.indexed_iter() {
-        if *ch == '[' {
-            assert!(!in_box);
-            in_box = true;
-        } else if *ch == ']' {
-            assert!(in_box);
-            in_box = false;
-            gps_sum += 100 * dist_from_top(&grid, pos) + dist_from_right(&grid, pos);
-        } else {
-            // ignore
+        match *ch {
+            'O' => {
+                gps_sum += 100 * pos.0 + pos.1;
+            }
+            '[' => {
+                assert!(!in_box);
+                in_box = true;
+            }
+            ']' => {
+                assert!(in_box);
+                in_box = false;
+                gps_sum += 100 * dist_from_top(&grid, pos) + dist_from_right(&grid, pos);
+            }
+            '@' | '#' | '.' => (),
+            _ => {
+                bail!("bad grid char");
+            }
         }
     }
-    gps_sum
+    Ok(gps_sum)
 }
 
 fn widen_grid(old_grid: &Array2<char>) -> Result<Array2<char>, Error> {
@@ -171,20 +171,16 @@ fn main() -> Result<(), Error> {
     for instr in extra.chars() {
         let delta = instr_to_delta(instr)?;
         if PART_TWO {
-            do_delta_p2(&mut grid, &mut cur_pos, delta)?;
+            do_delta(&mut grid, &mut cur_pos, delta)?;
         } else {
-            do_delta_p1(&mut grid, &mut cur_pos, delta)?;
+            do_delta(&mut grid, &mut cur_pos, delta)?;
         }
-        print!("\n\n\n\n\n\n\n");
-        println!("{instr}\n {grid:?}");
-        std::thread::sleep(std::time::Duration::from_secs(1));
+        // print!("\n\n\n\n\n\n\n");
+        // println!("{instr}\n {grid:?}");
+        // std::thread::sleep(std::time::Duration::from_secs(1));
     }
 
-    if PART_TWO {
-        println!("gps_sum = {}", calc_gps_sum_p2(&grid));
-    } else {
-        println!("gps_sum = {}", calc_gps_sum_p1(&grid));
-    }
+    println!("gps_sum = {}", calc_gps_sum(&grid)?);
 
     Ok(())
 }
