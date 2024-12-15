@@ -2,13 +2,8 @@ use anyhow::{anyhow, bail, Error};
 use ndarray::Array2;
 
 fn find_bot(grid: &Array2<char>) -> Option<(usize, usize)> {
-    for (pos, ch) in grid.indexed_iter() {
-        if *ch == '@' {
-            return Some(pos);
-        }
-    }
-
-    None
+    grid.indexed_iter()
+        .find_map(|(pos, ch)| if *ch == '@' { Some(pos) } else { None })
 }
 
 fn instr_to_delta(instr: char) -> Result<(i64, i64), Error> {
