@@ -94,7 +94,7 @@ fn find_anti_nodes_p2(
 }
 
 fn main() -> Result<(), Error> {
-    let mut grid = tools::load_grid(std::io::stdin().lock())?;
+    let (mut grid, _extra) = tools::load_grid(std::io::stdin().lock())?;
     // println!("{grid:?}");
 
     let antennas = find_antennas(&grid);

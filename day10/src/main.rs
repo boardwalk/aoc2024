@@ -72,7 +72,7 @@ fn eval_trailhead(heights: &Array2<char>, pos: (usize, usize)) -> Result<usize, 
 }
 
 fn main() -> Result<(), Error> {
-    let heights = tools::load_grid(std::io::stdin().lock())?;
+    let (heights, _extra) = tools::load_grid(std::io::stdin().lock())?;
     let mut total_score = 0;
     for (pos, val) in heights.indexed_iter() {
         if *val == '0' {

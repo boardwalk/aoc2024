@@ -28,12 +28,22 @@ impl GridShape {
     }
 }
 
-pub fn load_grid(rd: impl std::io::BufRead) -> Result<Array2<char>, Error> {
+pub fn load_grid(rd: impl std::io::BufRead) -> Result<(Array2<char>, Option<String>), Error> {
     let mut data = Vec::new();
     let mut grid_shape = GridShape::default();
+    let mut extra: Option<String> = None;
 
     for ln in rd.lines() {
         let ln = ln?;
+        if let Some(extra) = &mut extra {
+            extra.push_str(&ln);
+            continue;
+        }
+
+        if ln.is_empty() {
+            extra = Some(String::new());
+            continue;
+        }
 
         let mut col_count = 0;
         for ch in ln.chars() {
@@ -45,7 +55,8 @@ pub fn load_grid(rd: impl std::io::BufRead) -> Result<Array2<char>, Error> {
     }
 
     let shape = grid_shape.calc()?;
-    Array2::from_shape_vec(shape, data).map_err(|_| anyhow!("bad array shape"))
+    let grid = Array2::from_shape_vec(shape, data).map_err(|_| anyhow!("bad array shape"))?;
+    Ok((grid, extra))
 }
 
 pub const DELTAS: &[(i64, i64)] = &[(0, 1), (0, -1), (-1, 0), (1, 0)];
