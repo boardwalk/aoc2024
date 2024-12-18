@@ -1,0 +1,10 @@
+[package]
+name = "day16"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+ndarray = { workspace = true }
+regex = { workspace = true }
+tools = { workspace = true }

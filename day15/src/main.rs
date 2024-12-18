@@ -1,7 +1,7 @@
-use anyhow::{anyhow, bail, Error};
+use anyhow::{anyhow, bail, Error, Ok};
 use ndarray::Array2;
 
-const PART_TWO: bool = false;
+const PART_TWO: bool = true;
 
 fn find_bot(grid: &Array2<char>) -> Option<(usize, usize)> {
     grid.indexed_iter()
@@ -53,12 +53,130 @@ fn push_box_p1(
     Ok(true)
 }
 
+// we want to place ch at pos
+// in part two, box pos is the pos of the left bracket
+enum MyWorkItem {
+    Free { pos: (usize, usize) },
+    Box { pos: (usize, usize) },
+}
+
+struct WorkItem {
+    pos: (usize, usize),
+}
+
+struct HistoryItem {
+    old: char,
+    pos: (usize, usize),
+}
+
+struct LoggedGrid<'a> {
+    grid: &'a mut Array2<char>,
+    history: Vec<HistoryItem>,
+}
+
+impl<'a> LoggedGrid<'a> {
+    fn new(grid: &'a mut Array2<char>) -> Self {
+        let history = Vec::new();
+        Self { grid, history }
+    }
+
+    fn commit(&mut self) {
+        self.history.clear();
+    }
+
+    fn set(&mut self, pos: (usize, usize), ch: char) {
+        let item = HistoryItem {
+            old: self.grid[pos],
+            pos,
+        };
+
+        self.grid[pos] = ch;
+        self.history.push(item);
+    }
+}
+
+impl AsRef<Array2<char>> for LoggedGrid<'_> {
+    fn as_ref(&self) -> &Array2<char> {
+        self.grid
+    }
+}
+
+impl Drop for LoggedGrid<'_> {
+    fn drop(&mut self) {
+        for item in self.history.iter().rev() {
+            self.grid[item.pos] = item.old;
+        }
+    }
+}
+
+// add all the blocks to `out` that would get pushed if the block at `pos` were pushed in (dr, dc)
+fn find_contacts(
+    grid: &Array2<char>,
+    pos: (usize, usize),
+    (dr, dc): (i64, i64),
+    out: &mut Vec<(usize, usize)>,
+) {
+    assert_eq!(grid[pos], '[');
+    out.push(pos);
+
+    let Some(left_pos) = tools::shift(grid, pos, dr, dc) else {
+        return;
+    };
+
+    let Some(right_pos) = tools::shift(grid, (pos.0, pos.1 + 1), dr, dc) else {
+        return;
+    };
+}
+
 fn push_box_p2(
     grid: &mut Array2<char>,
     pos: (usize, usize),
     (dr, dc): (i64, i64),
 ) -> Result<bool, Error> {
-    todo!()
+    let mut queue: Vec<MyWorkItem> = Vec::new();
+    let mut grid = LoggedGrid::new(grid);
+
+    queue.push(MyWorkItem::Free { pos });
+    while let Some(work) = queue.pop() {
+        match work {
+            MyWorkItem::Free { pos } => {
+                match grid.as_ref()[pos] {
+                    '#' => {
+                        return Ok(false);
+                    }
+                    '.' => {
+                        // nothing to do
+                    }
+                    '[' | ']' => {
+                        let (left_pos, right_pos) = if grid.as_ref()[pos] == '[' {
+                            (pos, (pos.0, pos.1 + 1))
+                        } else {
+                            ((pos.0, pos.1 - 1), pos)
+                        };
+
+                        let Some(next_pos) = tools::shift(grid.as_ref(), left_pos, dr, dc) else {
+                            return Ok(false);
+                        };
+                        grid.set(left_pos, '.');
+                        grid.set(right_pos, '.');
+
+                        queue.push(MyWorkItem::Box { pos: next_pos });
+                    }
+                    _ => bail!("bad grid char"),
+                }
+            }
+            MyWorkItem::Box { pos } => match grid.as_ref()[pos] {
+                '#' => {
+                    return Ok(false);
+                }
+                '.' => {}
+                _ => bail!("bad grid char"),
+            },
+        }
+    }
+
+    grid.commit();
+    Ok(true)
 }
 
 fn do_delta(
