@@ -1,262 +1,229 @@
-#![feature(iterator_try_collect)]
-
-use anyhow::{anyhow, bail, Error, Ok};
+#![feature(new_range_api)]
+use anyhow::Error;
 use std::collections::HashMap;
-use std::io::BufRead;
-use std::str::FromStr as _;
 
-#[derive(Debug)]
-struct Interpreter {
-    a: usize,
-    b: usize,
-    c: usize,
-    program: Vec<usize>,
+const OUTPUT: &[usize] = &[2, 4, 1, 3, 7, 5, 1, 5, 0, 3, 4, 1, 5, 5, 3, 0];
+const CYCLES_PER_LOOP: usize = 8;
+const CYCLES_PER_INVOKE: usize = CYCLES_PER_LOOP * OUTPUT.len();
+
+const BIT_INDICES: std::ops::Range<usize> = 0usize..64usize;
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+enum Register {
+    A,
+    B,
+    C,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+struct Step(usize);
+
+impl Register {
+    fn get_bit_idx(self, b: usize) -> usize {
+        assert!(BIT_INDICES.contains(&b));
+        match self {
+            Register::A => b,
+            Register::B => b + 64,
+            Register::C => b + 64 + 64,
+        }
+    }
+}
+
+#[derive(Hash, PartialEq, Eq)]
+struct BitKey {
+    step: Step,
+    reg_bit_idx: usize,
+}
+
+impl BitKey {
+    fn get(step: Step, r: Register, b: usize) -> Self {
+        Self {
+            step,
+            reg_bit_idx: r.get_bit_idx(b),
+        }
+    }
+}
+
+struct State {
     ip: usize,
-    output: Vec<usize>,
+    num_unprints: usize,
+    step: Step,
+    // step to bit to value
+    a: Vec<Vec<Option<bool>>>,
+    b: Vec<Vec<Option<bool>>>,
+    c: Vec<Vec<Option<bool>>>,
+    did_enter_init: bool,
 }
 
-#[derive(Debug)]
-enum Instr {
-    Adv,
-    Bxl,
-    Bst,
-    Jnz,
-    Bxc,
-    Out,
-    Bdv,
-    Cdv,
-}
+impl State {
+    fn new() -> Self {
+        let ip = 7;
 
-impl Instr {
-    fn from_opcode(op: usize) -> Result<Self, Error> {
-        match op {
-            0 => Ok(Self::Adv),
-            1 => Ok(Self::Bxl),
-            2 => Ok(Self::Bst),
-            3 => Ok(Self::Jnz),
-            4 => Ok(Self::Bxc),
-            5 => Ok(Self::Out),
-            6 => Ok(Self::Bdv),
-            7 => Ok(Self::Cdv),
-            _ => Err(anyhow!("bad opcode")),
+        // a is 0 on exit
+        let a = vec![vec![Some(false)]];
+
+        let b = vec![];
+        let c = vec![];
+
+        Self {
+            ip,
+            num_unprints: 0,
+            step: Step(0),
+            did_enter_init: false,
+            a,
+            b,
+            c,
         }
     }
-}
 
-impl Interpreter {
-    fn resolve_operand(&self, operand: usize) -> Result<usize, Error> {
-        match operand {
-            0 | 1 | 2 | 3 => Ok(operand),
-            4 => Ok(self.a),
-            5 => Ok(self.b),
-            6 => Ok(self.c),
+    fn step_back(&mut self) -> bool {
+        println!("on step {}", self.step.0);
+        let before_step = self.step;
+        let after_step = Step(self.step.0 + 1);
+
+        while self.a.len() < before_step.0 {
+            self.a.push(Vec::new());
+        }
+
+        while self.b.len() < before_step.0 {
+            self.b.push(Vec::new());
+        }
+
+        while self.c.len() < before_step.0 {
+            self.c.push(Vec::new());
+        }
+
+        while self.a.len() < after_step.0 {
+            self.a.push(Vec::new());
+        }
+
+        while self.b.len() < after_step.0 {
+            self.b.push(Vec::new());
+        }
+
+        while self.c.len() < after_step.0 {
+            self.c.push(Vec::new());
+        }
+
+        let a_1 = &self.a[before_step.0];
+        let b_1 = &self.b[before_step.0];
+        let c_1 = &self.c[before_step.0];
+
+        let a_2 = &mut self.a[after_step.0];
+        let b_2 = &mut self.b[after_step.0];
+        let c_2 = &mut self.c[after_step.0];
+
+        *a_1 = a_2.clone();
+        *b_1 = b_2.clone();
+        *c_1 = c_2.clone();
+
+        let mut a = self.a.get_mut(before_step.0);
+        match self.ip {
+            0 => {
+                // b = a & 7
+                // undo the write to b
+            }
+            1 => {
+                // b ^= 3
+                // flip bits 0 and 1 of b
+            }
+            2 => {
+                // c >>= b
+                // need to shift left and clear low bits
+            }
+            3 => {
+                // b ^= 5
+                // flip bits 0 and 2 of b
+            }
+            4 => {
+                // a >>= 3
+                // to undo shifting low bits out, shift high bits in
+            }
+            5 => {
+                // b ^= c
+            }
+            6 => {
+                // out a & 8
+                self.num_unprints += 1;
+                let val = OUTPUT[OUTPUT.len() - self.num_unprints];
+            }
+            7 => {
+                //
+            }
             _ => {
-                bail!("invalid combo operand");
+                panic!("bad ip");
             }
         }
-    }
 
-    fn do_div(&self, operand: usize) -> Result<usize, Error> {
-        let numer = self.a;
+        if self.ip > 0 {
+            self.ip -= 1;
+        } else {
+            self.ip = 7;
+        }
 
-        let operand = self.resolve_operand(operand)?;
-        let denom = 1 << operand;
-        println!("numer = {numer}, denom = {denom} operand = {operand}");
-        Ok(numer / denom)
-    }
-
-    // returns false if the program has terminated
-    fn step(&mut self) -> Result<bool, Error> {
-        let Some((instr, operand)) = self.get_val() else {
-            return Ok(false);
-        };
-
-        let instr = Instr::from_opcode(instr)?;
-
-        let mut skip_incr = false;
-        println!("exec {instr:?}, {operand}");
-        match instr {
-            Instr::Adv => {
-                println!("a was {}", self.a);
-                self.a = self.do_div(operand)?;
-                println!("a is now {}", self.a);
-            }
-            Instr::Bxl => {
-                self.b = self.b ^ operand;
-                println!("b is now {}", self.b);
-            }
-            Instr::Bst => {
-                let operand = self.resolve_operand(operand)?;
-                self.b = operand % 8;
-                println!("b is now {}", self.b);
-            }
-            Instr::Jnz => {
-                if self.a != 0 {
-                    self.ip = operand;
-                    skip_incr = true;
-                    println!("ip is now {}", self.ip);
+        if self.num_unprints == 16 && self.ip == 0 {
+            // b is 0 on entrance
+            if !self.did_enter_init {
+                for i in BIT_INDICES {
+                    let k = BitKey::get(after_step, Register::B, i);
+                    let v = false;
+                    self.history.insert(k, v);
                 }
-            }
-            Instr::Bxc => {
-                self.b = self.b ^ self.c;
-                println!("b is now {}", self.b);
-            }
-            Instr::Out => {
-                let operand = self.resolve_operand(operand)?;
-                self.output.push(operand % 8);
-                println!("output was {}", self.output.last().unwrap());
-            }
-            Instr::Bdv => {
-                self.b = self.do_div(operand)?;
-            }
-            Instr::Cdv => {
-                self.c = self.do_div(operand)?;
-            }
-        }
 
-        if !skip_incr {
-            self.ip += 2;
-        }
+                // c is 0 on entrance
+                for i in BIT_INDICES {
+                    let k = BitKey::get(after_step, Register::C, i);
+                    let v = false;
+                    self.history.insert(k, v);
+                }
 
-        Ok(true)
+                self.did_enter_init = true;
+            }
+
+            self.num_unprints = 0;
+            self.ip = 7;
+            self.step = Step(0);
+            false
+        } else {
+            self.step = after_step;
+            true
+        }
     }
 
-    fn get_val(&mut self) -> Option<(usize, usize)> {
-        let instr = self.program.get(self.ip)?;
-        let operand = self.program.get(self.ip + 1)?;
-        Some((*instr, *operand))
-    }
-}
+    fn reset(&mut self) {
+        if !self.did_enter_init {
+            for i in BIT_INDICES {
+                let k = BitKey::get(Step(CYCLES_PER_INVOKE), Register::B, i);
+                let v = false;
+                self.history.insert(k, v);
+            }
 
-fn read_input(rd: impl BufRead) -> Result<Interpreter, Error> {
-    let mut data: HashMap<String, String> = HashMap::new();
+            // c is 0 on entrance
+            for i in BIT_INDICES {
+                let k = BitKey::get(Step(CYCLES_PER_INVOKE), Register::C, i);
+                let v = false;
+                self.history.insert(k, v);
+            }
 
-    for ln in rd.lines() {
-        let ln = ln?;
-        if ln.is_empty() {
-            continue;
+            self.did_enter_init = true;
         }
 
-        let (k, v) = ln.split_once(':').unwrap();
-        let k = k.trim();
-        let v = v.trim();
-        let prev = data.insert(k.to_owned(), v.to_owned());
-        assert!(prev.is_none());
+        self.num_unprints = 0;
+        self.ip = 7;
+        self.step = Step(0);
     }
-
-    let a = usize::from_str(data.get("Register A").unwrap())?;
-    let b = usize::from_str(data.get("Register B").unwrap())?;
-    let c = usize::from_str(data.get("Register C").unwrap())?;
-    let program = data.get("Program").unwrap();
-    let program = program.split(',').map(usize::from_str).try_collect()?;
-
-    Ok(Interpreter {
-        a,
-        b,
-        c,
-        program,
-        ip: 0,
-        output: Vec::new(),
-    })
-}
-
-fn test_1() -> Result<(), Error> {
-    let mut i = Interpreter {
-        a: 0,
-        b: 0,
-        c: 9,
-        program: vec![2, 6],
-        ip: 0,
-        output: Vec::new(),
-    };
-
-    while i.step()? {}
-    assert_eq!(i.b, 1);
-    Ok(())
-}
-
-fn test_2() -> Result<(), Error> {
-    let mut i = Interpreter {
-        a: 10,
-        b: 0,
-        c: 0,
-        program: vec![5, 0, 5, 1, 5, 4],
-        ip: 0,
-        output: Vec::new(),
-    };
-
-    while i.step()? {}
-    assert_eq!(i.output, &[0, 1, 2]);
-
-    Ok(())
-}
-
-fn test_3() -> Result<(), Error> {
-    let mut i = Interpreter {
-        a: 2024,
-        b: 0,
-        c: 0,
-        program: vec![0, 1, 5, 4, 3, 0],
-        ip: 0,
-        output: Vec::new(),
-    };
-
-    while i.step()? {}
-    assert_eq!(i.output, &[4, 2, 5, 6, 7, 7, 7, 7, 3, 1, 0]);
-    assert_eq!(i.a, 0);
-
-    Ok(())
-}
-
-fn test_4() -> Result<(), Error> {
-    let mut i = Interpreter {
-        a: 0,
-        b: 29,
-        c: 0,
-        program: vec![1, 7],
-        ip: 0,
-        output: Vec::new(),
-    };
-
-    while i.step()? {}
-    assert_eq!(i.b, 26);
-
-    Ok(())
-}
-
-fn test_5() -> Result<(), Error> {
-    let mut i = Interpreter {
-        a: 0,
-        b: 2024,
-        c: 43690,
-        program: vec![4, 0],
-        ip: 0,
-        output: Vec::new(),
-    };
-
-    while i.step()? {}
-    assert_eq!(i.b, 44354);
-
-    Ok(())
 }
 
 fn main() -> Result<(), Error> {
-    test_1()?;
-    test_2()?;
-    test_3()?;
-    test_4()?;
-    test_5()?;
+    let mut st = State::new();
 
-    let mut interp = read_input(std::io::stdin().lock())?;
-    println!("before = {interp:?}");
-
-    while interp.step()? {}
-
-    println!("after = {interp:?}");
-
-    let out: Vec<String> = interp.output.iter().map(usize::to_string).collect();
-    let out = out.as_slice().join(",");
-    println!("{out}");
-
-    Ok(())
+    loop {
+        while st.step_back() {}
+        st.reset();
+        println!(
+            "reset, hist size is {}, val len size is {}",
+            st.history.len(),
+            st.val_len.len()
+        );
+    }
 }
