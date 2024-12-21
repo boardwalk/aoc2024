@@ -8,6 +8,7 @@ indicatif = { version = "0.17", features = ["rayon"] }
 ndarray = { version = "0.16", default-features = false }
 nom = "7"
 num-bigint = "0.4"
+rand = "0.8"
 rayon = "1"
 regex = "1"
 tools = { path = "tools" }

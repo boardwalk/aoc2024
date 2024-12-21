@@ -1,229 +1,164 @@
 #![feature(new_range_api)]
 use anyhow::Error;
-use std::collections::HashMap;
+use rand::Rng;
 
-const OUTPUT: &[usize] = &[2, 4, 1, 3, 7, 5, 1, 5, 0, 3, 4, 1, 5, 5, 3, 0];
-const CYCLES_PER_LOOP: usize = 8;
-const CYCLES_PER_INVOKE: usize = CYCLES_PER_LOOP * OUTPUT.len();
+// const FINAL_I: usize = 0b11101101001100011000101001101111011001100010;
+// const SAMPLE_I: usize = 0b111001101011001010101111110;
 
-const BIT_INDICES: std::ops::Range<usize> = 0usize..64usize;
+// known output from part a given 21539243
+const PART_1_ANSWER_VEC: &[usize] = &[6, 7, 5, 2, 1, 3, 5, 1, 7];
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-enum Register {
-    A,
-    B,
-    C,
+const PART_2_TARGET_VEC: &[usize] = &[2, 4, 1, 3, 7, 5, 1, 5, 0, 3, 4, 1, 5, 5, 3, 0];
+
+fn vec_to_int(prog: &[usize]) -> usize {
+    let mut ret = 0;
+
+    for val in prog.iter() {
+        ret = ret * 8 + val;
+    }
+    ret
 }
 
-#[derive(Clone, Copy, Hash, PartialEq, Eq)]
-struct Step(usize);
+fn score(actual: usize, expected: usize) -> usize {
+    let mut dist = 0;
 
-impl Register {
-    fn get_bit_idx(self, b: usize) -> usize {
-        assert!(BIT_INDICES.contains(&b));
+    for actual_idx in 0..64 {
+        for expected_idx in actual_idx + 1..64 {
+            let actual_val = (actual >> actual_idx) & 1 != 0;
+            let expected_val = (expected >> expected_idx) & 1 != 0;
+            if actual_val == expected_val {
+                continue;
+            }
+
+            // println!("diff at {actual_idx}, {expected_idx}");
+            // dist += 1 << (std::cmp::min(expected_idx - actual_idx, 8));
+            dist += 1;
+        }
+    }
+
+    // println!("score is {dist}");
+
+    dist
+}
+
+fn eval(mut in_val: usize, with_print: bool) -> (usize, usize) {
+    let mut actual = 0;
+    let mut len = 0;
+    loop {
+        len += 1;
+        // println!("in_val = {in_val:048b}, out_val={out_val:048b}");
+        // calculate p for this iter
+        let shift_val = (in_val ^ 0b011) & 0b111;
+        let p = in_val ^ (in_val >> shift_val);
+        let p = p ^ 0b110;
+
+        if with_print {
+            println!("blat, {}", p & 0b111);
+        }
+
+        actual = actual << 3 | (p & 0b111);
+
+        in_val >>= 3;
+
+        if in_val == 0 {
+            break;
+        }
+    }
+
+    (actual, len)
+
+    // println!("in_val = {in_val}, expected = {expected}, actual = {actual}");
+}
+
+enum DoOp {
+    Add,
+    Sub,
+    None,
+}
+
+impl DoOp {
+    fn do_it(&self, guess: usize) -> Option<usize> {
         match self {
-            Register::A => b,
-            Register::B => b + 64,
-            Register::C => b + 64 + 64,
+            DoOp::Add => guess.checked_add(1),
+            DoOp::Sub => guess.checked_sub(1),
+            DoOp::None => Some(guess),
         }
-    }
-}
-
-#[derive(Hash, PartialEq, Eq)]
-struct BitKey {
-    step: Step,
-    reg_bit_idx: usize,
-}
-
-impl BitKey {
-    fn get(step: Step, r: Register, b: usize) -> Self {
-        Self {
-            step,
-            reg_bit_idx: r.get_bit_idx(b),
-        }
-    }
-}
-
-struct State {
-    ip: usize,
-    num_unprints: usize,
-    step: Step,
-    // step to bit to value
-    a: Vec<Vec<Option<bool>>>,
-    b: Vec<Vec<Option<bool>>>,
-    c: Vec<Vec<Option<bool>>>,
-    did_enter_init: bool,
-}
-
-impl State {
-    fn new() -> Self {
-        let ip = 7;
-
-        // a is 0 on exit
-        let a = vec![vec![Some(false)]];
-
-        let b = vec![];
-        let c = vec![];
-
-        Self {
-            ip,
-            num_unprints: 0,
-            step: Step(0),
-            did_enter_init: false,
-            a,
-            b,
-            c,
-        }
-    }
-
-    fn step_back(&mut self) -> bool {
-        println!("on step {}", self.step.0);
-        let before_step = self.step;
-        let after_step = Step(self.step.0 + 1);
-
-        while self.a.len() < before_step.0 {
-            self.a.push(Vec::new());
-        }
-
-        while self.b.len() < before_step.0 {
-            self.b.push(Vec::new());
-        }
-
-        while self.c.len() < before_step.0 {
-            self.c.push(Vec::new());
-        }
-
-        while self.a.len() < after_step.0 {
-            self.a.push(Vec::new());
-        }
-
-        while self.b.len() < after_step.0 {
-            self.b.push(Vec::new());
-        }
-
-        while self.c.len() < after_step.0 {
-            self.c.push(Vec::new());
-        }
-
-        let a_1 = &self.a[before_step.0];
-        let b_1 = &self.b[before_step.0];
-        let c_1 = &self.c[before_step.0];
-
-        let a_2 = &mut self.a[after_step.0];
-        let b_2 = &mut self.b[after_step.0];
-        let c_2 = &mut self.c[after_step.0];
-
-        *a_1 = a_2.clone();
-        *b_1 = b_2.clone();
-        *c_1 = c_2.clone();
-
-        let mut a = self.a.get_mut(before_step.0);
-        match self.ip {
-            0 => {
-                // b = a & 7
-                // undo the write to b
-            }
-            1 => {
-                // b ^= 3
-                // flip bits 0 and 1 of b
-            }
-            2 => {
-                // c >>= b
-                // need to shift left and clear low bits
-            }
-            3 => {
-                // b ^= 5
-                // flip bits 0 and 2 of b
-            }
-            4 => {
-                // a >>= 3
-                // to undo shifting low bits out, shift high bits in
-            }
-            5 => {
-                // b ^= c
-            }
-            6 => {
-                // out a & 8
-                self.num_unprints += 1;
-                let val = OUTPUT[OUTPUT.len() - self.num_unprints];
-            }
-            7 => {
-                //
-            }
-            _ => {
-                panic!("bad ip");
-            }
-        }
-
-        if self.ip > 0 {
-            self.ip -= 1;
-        } else {
-            self.ip = 7;
-        }
-
-        if self.num_unprints == 16 && self.ip == 0 {
-            // b is 0 on entrance
-            if !self.did_enter_init {
-                for i in BIT_INDICES {
-                    let k = BitKey::get(after_step, Register::B, i);
-                    let v = false;
-                    self.history.insert(k, v);
-                }
-
-                // c is 0 on entrance
-                for i in BIT_INDICES {
-                    let k = BitKey::get(after_step, Register::C, i);
-                    let v = false;
-                    self.history.insert(k, v);
-                }
-
-                self.did_enter_init = true;
-            }
-
-            self.num_unprints = 0;
-            self.ip = 7;
-            self.step = Step(0);
-            false
-        } else {
-            self.step = after_step;
-            true
-        }
-    }
-
-    fn reset(&mut self) {
-        if !self.did_enter_init {
-            for i in BIT_INDICES {
-                let k = BitKey::get(Step(CYCLES_PER_INVOKE), Register::B, i);
-                let v = false;
-                self.history.insert(k, v);
-            }
-
-            // c is 0 on entrance
-            for i in BIT_INDICES {
-                let k = BitKey::get(Step(CYCLES_PER_INVOKE), Register::C, i);
-                let v = false;
-                self.history.insert(k, v);
-            }
-
-            self.did_enter_init = true;
-        }
-
-        self.num_unprints = 0;
-        self.ip = 7;
-        self.step = Step(0);
     }
 }
 
 fn main() -> Result<(), Error> {
-    let mut st = State::new();
+    let part_1_answer_i = vec_to_int(PART_1_ANSWER_VEC);
+    let (part_1_i_eval, _) = eval(21539243, true);
+    let part_2_target_i = vec_to_int(PART_2_TARGET_VEC);
+    assert_eq!(part_1_answer_i, part_1_i_eval);
+
+    let mut rng = rand::thread_rng();
+
+    let mut guess: usize = 0;
+    let mut variations: Vec<usize> = Vec::new();
 
     loop {
-        while st.step_back() {}
-        st.reset();
-        println!(
-            "reset, hist size is {}, val len size is {}",
-            st.history.len(),
-            st.val_len.len()
-        );
+        variations.clear();
+        // push current best guess
+        variations.push(guess);
+
+        for not_val in [usize::MIN, usize::MAX] {
+            let guess_1 = guess ^ not_val;
+            // try variations of shifting
+            for shift_out_val in 0..8 {
+                let guess_2 = guess_1 >> shift_out_val;
+
+                for shift_in_val in 0..8 {
+                    let guess_3 = guess_2 << shift_in_val;
+                    // try flipping bits
+                    for _i in 0..64 {
+                        let bit_index: i32 = rng.gen_range(0..64);
+                        let bit_val: bool = rng.gen();
+                        let bit_val = usize::from(bit_val);
+                        let guess_4 = guess_3 ^ (bit_val << bit_index);
+                        // try adding and subtracting
+                        for op in &[DoOp::Add, DoOp::Sub, DoOp::None] {
+                            let Some(guess_5) = op.do_it(guess_4) else {
+                                continue;
+                            };
+
+                            // try xoring
+                            for val in 0..8 {
+                                let guess_6 = guess_5 ^ val;
+                                variations.push(guess_6);
+
+                                // try anding
+                                for val in 0..8 {
+                                    let guess_7 = guess_6 & val;
+                                    variations.push(guess_7);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // println!("len {}", variations.len());
+
+        guess = variations
+            .iter()
+            .copied()
+            .min_by_key(|a_val| {
+                let (actual, len) = eval(*a_val, false);
+
+                if len != 16 {
+                    return usize::MAX;
+                }
+                let expected = part_2_target_i;
+                score(actual, expected)
+            })
+            .unwrap();
+
+        let (guess_i, _len) = eval(guess, true);
+
+        let guess_score = score(guess_i, part_2_target_i);
+
+        println!("guess is {guess}, guess score is = {guess_score}");
     }
 }

@@ -2,8 +2,10 @@
 from typing import Optional
 from enum import Enum
 from abc import ABC, abstractmethod
+import time
 
 EXPECTED = [6, 7, 5, 2, 1, 3, 5, 1, 7]
+FINAL = [2,4,1,3,7,5,1,5,0,3,4,1,5,5,3,0]
 
 def flip_bit(val: Optional[bool]) -> Optional[bool]:
     return not val if val is not None else None
@@ -127,35 +129,122 @@ class State:
     def __str__(self) -> str:
         return f'a={self.a}, b={self.b}, c={self.c}'
 
-def eval(a, c, out):
-    # 2,4 bst (1)
-    b = a & 7
-    # 1,3 bxl (2)
-    b = b ^ 3
-    # 7,5 cdv (3)
-    c = a >> b
-    # 1,5 bxl (4)
-    b = b ^ 5
-    # 0,3 adv (5)
-    a = a >> 3
-    # 4,1 bxc (6)
-    b = b ^ c
-    # 5,5 out (7)
-    out.append(b % 8)
-    # 3,0 jnz (8)
-    if a != 0:
-        eval(a=a, c=c, out=out)
+class Context:
+    def __init__(self):
+        self.remaining = list(EXPECTED)
+        self.known = {}
+
+    def shift_up(self):
+        pass
+
+def eval(a, out):
+    out.append((a ^ 0b110 ^ a >> (0b11 ^ a & 0b111)) & 0b111)
+    if (a >> 3) != 0:
+        eval(a=(a >> 3), out=out)
+
+def eval2(ctx: Context):
+    # (1)
+    # p4 = ((a ^ 0b11) & 0b111)
+    # (2)
+    # p3 = 0b110
+    # (3)
+    # p2 = p3 >> p4
+    # (4)
+    # p1 = p2 & 0b111
+    # (5)
+    # out.append(p1)
+
+    # if (a >> 3) != 0:
+    # (6)
+    #     eval(a=(a >> 3), out=out)
+    ctx.shift_up()
+    val = ctx.remaining.pop()
+    # (4) force p2 low bits
+    # (3) choose all shifts
+
+
+
+def cmp(out: list[int]) -> int:
+    for l, r in zip(out, EXPECTED):
+        if l + 4 > r:
+            return 1
+        elif r + 4 > l:
+            return -1
+        else:
+            raise RuntimeError('jitter')
+
+
+
+
+def out_to_num(out: list[int]) -> int:
+    res = 0
+    for v in out:
+        res *8 + v
+    return res
+
+def dist(out: list[int]) -> int:
+    for l, r in zip(out, EXPECTED):
+        if l + 4 > r:
+            return 1
+        elif r + 4 > l:
+            return -1
+        else:
+            raise RuntimeError('jitter')
 
 
 def main():
+    # ctx = []
+    # for out in reversed(EXPECTED):
+    #     eval2(ctx, out)
+    # print(ctx)
+
+
+
     # st = State()
     # for i in range(5):
     #     st.step()
     #     print(f'{st}')
     out = []
-    eval(a=21539243, c=0, out=out)
+
+    MIN_VAL = 0b1000000000000000000000000000000000000000000000
+    MAX_VAL = 0b111111111111111111111111111111111111111111111111
+    # a = (MAX_VAL - MAX_VAL) * 9 // 8 + MIN_VAL
+    # a =  MAX_VAL - 242_290_604_621_823
+    # 246_290_604_621_823
+    lo = MIN_VAL
+    hi = MAX_VAL
+
+    # a = MIN_VAL + MAX_VAL // 2
+    while True:
+        m =(lo + hi) // 2
+        out.clear()
+        eval(a=m, out=out)
+        print(f'a={m}, out={out}')
+
+        out_num = out_to_num(out)
+        expected_num = out_to_num(EXPECTED)
+        dist = abs(out_num - expected_num)
+        print(f'{dist}')
+        assert len(out) == 16
+        c = cmp(out)
+        if c < 0:
+            # go right
+            print('left')
+            lo = m  + 1
+        else:
+            print('right')
+            hi = m - 1
+        time.sleep(0.2)
+
+        # a += 2 * 32
+        # a -= 1
+        # print(out)
+
+    # print(len(out))
     print(out)
-    assert out == EXPECTED
+    # assert out == EXPECTED
+    # ctx = Context()
+    # eval2(ctx)
 
 if __name__ == '__main__':
     main()
