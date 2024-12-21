@@ -61,8 +61,8 @@ pub fn load_grid(rd: impl std::io::BufRead) -> Result<(Array2<char>, Option<Stri
 
 pub const DELTAS: &[(i64, i64)] = &[(0, 1), (0, -1), (-1, 0), (1, 0)];
 
-pub fn shift(
-    heights: &Array2<char>,
+pub fn shift<T>(
+    heights: &Array2<T>,
     pos: (usize, usize),
     dr: i64,
     dc: i64,
