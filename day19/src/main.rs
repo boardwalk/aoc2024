@@ -24,7 +24,7 @@ fn viable_pattern_len_to_count(patterns: &[String], goal: &str) -> HashMap<usize
 }
 
 // result_cache is goal len to number of solutions
-fn count_designs2_inner(
+fn count_designs_inner(
     patterns: &[String],
     goal: &str,
     result_cache: &mut HashMap<usize, usize>,
@@ -40,16 +40,16 @@ fn count_designs2_inner(
     let mut res = 0;
     for (len, count) in viable_pattern_len_to_count(patterns, goal) {
         // recurse with a shorter goal using this pattern len
-        res = res + count_designs2_inner(patterns, &goal[len..], result_cache) * count
+        res = res + count_designs_inner(patterns, &goal[len..], result_cache) * count
     }
 
     result_cache.insert(goal.len(), res);
     res
 }
 
-fn count_designs2(patterns: &[String], goal: &str) -> usize {
+fn count_designs(patterns: &[String], goal: &str) -> usize {
     let mut result_cache = HashMap::new();
-    count_designs2_inner(patterns, goal, &mut result_cache)
+    count_designs_inner(patterns, goal, &mut result_cache)
 }
 
 fn parse_towels() -> Result<Towels, Error> {
@@ -72,7 +72,7 @@ fn main() -> Result<(), Error> {
         let num_designs: usize = towels
             .goals
             .iter()
-            .map(|goal| count_designs2(&towels.patterns, goal))
+            .map(|goal| count_designs(&towels.patterns, goal))
             .sum();
 
         println!("num_designs = {num_designs}");
@@ -80,7 +80,7 @@ fn main() -> Result<(), Error> {
         let num_possible: usize = towels
             .goals
             .iter()
-            .filter(|goal| count_designs2(&towels.patterns, goal) != 0)
+            .filter(|goal| count_designs(&towels.patterns, goal) != 0)
             .count();
 
         println!("num_possible = {num_possible}");
