@@ -1,8 +1,9 @@
 #![feature(iterator_try_collect)]
 #![feature(hash_set_entry)]
-
 use anyhow::Error;
-use std::collections::HashSet;
+use std::collections::HashMap;
+
+const PART_TWO: bool = true;
 
 #[derive(Debug)]
 struct Towels {
@@ -10,48 +11,49 @@ struct Towels {
     goals: Vec<String>,
 }
 
-fn design_possible(patterns: &[String], goal: &str) -> bool {
-    println!("design_possible() with goal {goal:?}");
+fn inner_thing(patterns: &[String], goal: &str) -> HashMap<usize, usize> {
+    let mut res = HashMap::new();
 
-    let mut prototype_queue: Vec<String> = Vec::new();
-    prototype_queue.push("".to_owned());
-    let mut seen_prototypes: HashSet<String> = HashSet::new();
-    while let Some(mut prototype) = prototype_queue.pop() {
-        // don't follow prototypes multiple times
-        let old_seen_len = seen_prototypes.len();
-        seen_prototypes.get_or_insert_with(&prototype, String::clone);
-        if seen_prototypes.len() == old_seen_len {
-            continue;
-        }
-
-        for pattern in patterns {
-            // skip pattern if not short enough to fit
-            if prototype.len() + pattern.len() > goal.len() {
-                continue;
-            }
-
-            // skip pattern if would not match
-            prototype.push_str(pattern);
-            let pattern_works = goal.starts_with(&prototype);
-            for _i in 0..pattern.chars().count() {
-                prototype.pop().unwrap();
-            }
-
-            if !pattern_works {
-                continue;
-            }
-
-            let mut extended_prototype = prototype.to_owned();
-            extended_prototype.push_str(pattern);
-            if extended_prototype == goal {
-                return true;
-            }
-
-            prototype_queue.push(extended_prototype);
+    for pattern in patterns {
+        if goal.starts_with(pattern) {
+            let count = res.entry(pattern.len()).or_default();
+            *count += 1;
         }
     }
 
-    false
+    res
+}
+
+// len_to_count is goal len to number of solutions
+
+fn count_designs2_inner(
+    patterns: &[String],
+    goal: &str,
+    len_to_count: &mut HashMap<usize, usize>,
+) -> usize {
+    let mut res = 0;
+
+    // if we already have an answer, just use it
+    if let Some(count) = len_to_count.get(&goal.len()) {
+        return *count;
+    }
+
+    for (len, count) in inner_thing(patterns, goal) {
+        let sub_solutions = count_designs2_inner(patterns, &goal[len..], len_to_count);
+
+        res = res + (sub_solutions * count);
+    }
+
+    len_to_count.insert(goal.len(), res);
+
+    res
+}
+
+fn count_designs2(patterns: &[String], goal: &str) -> usize {
+    let mut len_to_count = HashMap::new();
+    len_to_count.insert(0, 1);
+
+    count_designs2_inner(patterns, goal, &mut len_to_count)
 }
 
 fn parse_towels() -> Result<Towels, Error> {
@@ -70,12 +72,22 @@ fn main() -> Result<(), Error> {
     let towels = parse_towels()?;
     println!("{towels:?}");
 
-    let num_possible: usize = towels
-        .goals
-        .iter()
-        .filter(|goal| design_possible(&towels.patterns, goal))
-        .count();
+    if PART_TWO {
+        let num_designs: usize = towels
+            .goals
+            .iter()
+            .map(|goal| count_designs2(&towels.patterns, goal))
+            .sum();
 
-    println!("{num_possible}");
+        println!("num_designs = {num_designs}");
+    } else {
+        let num_possible: usize = towels
+            .goals
+            .iter()
+            .filter(|goal| count_designs2(&towels.patterns, goal) != 0)
+            .count();
+
+        println!("num_possible = {num_possible}");
+    }
     Ok(())
 }
