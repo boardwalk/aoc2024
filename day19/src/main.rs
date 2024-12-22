@@ -10,8 +10,7 @@ struct Towels {
     patterns: Vec<String>,
     goals: Vec<String>,
 }
-
-fn inner_thing(patterns: &[String], goal: &str) -> HashMap<usize, usize> {
+fn viable_pattern_len_to_count(patterns: &[String], goal: &str) -> HashMap<usize, usize> {
     let mut res = HashMap::new();
 
     for pattern in patterns {
@@ -24,42 +23,39 @@ fn inner_thing(patterns: &[String], goal: &str) -> HashMap<usize, usize> {
     res
 }
 
-// len_to_count is goal len to number of solutions
-
+// result_cache is goal len to number of solutions
 fn count_designs2_inner(
     patterns: &[String],
     goal: &str,
-    len_to_count: &mut HashMap<usize, usize>,
+    result_cache: &mut HashMap<usize, usize>,
 ) -> usize {
-    let mut res = 0;
-
+    if goal.is_empty() {
+        return 1;
+    }
     // if we already have an answer, just use it
-    if let Some(count) = len_to_count.get(&goal.len()) {
+    if let Some(count) = result_cache.get(&goal.len()) {
         return *count;
     }
 
-    for (len, count) in inner_thing(patterns, goal) {
-        let sub_solutions = count_designs2_inner(patterns, &goal[len..], len_to_count);
-
-        res = res + (sub_solutions * count);
+    let mut res = 0;
+    for (len, count) in viable_pattern_len_to_count(patterns, goal) {
+        // recurse with a shorter goal using this pattern len
+        res = res + count_designs2_inner(patterns, &goal[len..], result_cache) * count
     }
 
-    len_to_count.insert(goal.len(), res);
-
+    result_cache.insert(goal.len(), res);
     res
 }
 
 fn count_designs2(patterns: &[String], goal: &str) -> usize {
-    let mut len_to_count = HashMap::new();
-    len_to_count.insert(0, 1);
-
-    count_designs2_inner(patterns, goal, &mut len_to_count)
+    let mut result_cache = HashMap::new();
+    count_designs2_inner(patterns, goal, &mut result_cache)
 }
 
 fn parse_towels() -> Result<Towels, Error> {
     let mut lines: Vec<String> = std::io::stdin().lines().try_collect()?;
 
-    let patterns: Vec<String> = lines.remove(0).split(", ").map(|s| s.to_owned()).collect();
+    let patterns = lines.remove(0).split(", ").map(|s| s.to_owned()).collect();
     assert!(lines.remove(0).is_empty());
 
     Ok(Towels {
