@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Error};
+use anyhow::{anyhow, Error};
 
 use crate::heap::*;
 use ndarray::Array2;
@@ -11,6 +11,7 @@ mod heap;
 // const HEIGHT: usize = 7;
 const WIDTH: usize = 71;
 const HEIGHT: usize = 71;
+const PART_TWO: bool = true;
 
 #[derive(PartialEq, Eq, Clone, Copy, Debug, Hash)]
 struct Node {
@@ -57,26 +58,7 @@ fn find_neighbors(grid: &Array2<bool>, node: Node) -> Vec<Node> {
     result
 }
 
-fn main() -> Result<(), Error> {
-    let mut grid = Array2::from_elem((WIDTH, HEIGHT), false);
-
-    let mut drops = Vec::new();
-
-    for ln in std::io::stdin().lines() {
-        let ln = ln?;
-        let (x, y) = ln
-            .split_once(',')
-            .ok_or_else(|| anyhow!("bad coordinate"))?;
-        let x = usize::from_str(x)?;
-        let y = usize::from_str(y)?;
-
-        drops.push((x, y));
-    }
-
-    for (x, y) in drops.iter().copied().take(1024) {
-        grid[(x, y)] = true;
-    }
-
+fn find_path(grid: &Array2<bool>) -> Option<usize> {
     let mut frontier = Vec::new();
     let mut expanded: HashSet<(usize, usize)> = HashSet::new();
 
@@ -90,12 +72,12 @@ fn main() -> Result<(), Error> {
 
     loop {
         let Some(node) = heap_pop(&mut frontier) else {
-            bail!("did not reach goal");
+            return None;
         };
 
         if node.is_end() {
             println!("reached end in {} steps", node.steps);
-            break Ok(());
+            break Some(node.steps);
         }
 
         expanded.insert(node.pos);
@@ -115,7 +97,44 @@ fn main() -> Result<(), Error> {
                     heap_decrease(&mut frontier, frontier_idx);
                 }
             }
-            //
         }
     }
+}
+
+fn main() -> Result<(), Error> {
+    let mut grid = Array2::from_elem((WIDTH, HEIGHT), false);
+
+    let mut drops = Vec::new();
+
+    for ln in std::io::stdin().lines() {
+        let ln = ln?;
+        let (x, y) = ln
+            .split_once(',')
+            .ok_or_else(|| anyhow!("bad coordinate"))?;
+        let x = usize::from_str(x)?;
+        let y = usize::from_str(y)?;
+
+        drops.push((x, y));
+    }
+
+    if PART_TWO {
+        for (x, y) in drops.iter().copied() {
+            grid[(x, y)] = true;
+            println!("dropped {x}, {y}");
+
+            if find_path(&grid).is_none() {
+                println!("{x},{y}");
+                return Ok(());
+            }
+        }
+    } else {
+        for (x, y) in drops.iter().copied().take(1024) {
+            grid[(x, y)] = true;
+        }
+
+        let score = find_path(&grid).ok_or_else(|| anyhow!("path not found"))?;
+        println!("{score}");
+    }
+
+    Ok(())
 }
