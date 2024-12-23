@@ -1,11 +1,9 @@
 use anyhow::{anyhow, Error};
 
-use crate::heap::*;
 use ndarray::Array2;
 use std::collections::HashSet;
 use std::str::FromStr as _;
-
-mod heap;
+use tools::{heap_decrease, heap_pop, heap_push};
 
 // const WIDTH: usize = 7;
 // const HEIGHT: usize = 7;
