@@ -2,6 +2,7 @@ mod grid;
 mod heap;
 
 pub use grid::load_grid;
+pub use grid::print_grid;
 pub use heap::{heap_decrease, heap_pop, heap_push};
 
 use ndarray::Array2;

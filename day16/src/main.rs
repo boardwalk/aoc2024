@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::Error;
 use ndarray::Array2;
 use std::collections::{BTreeSet, BinaryHeap};

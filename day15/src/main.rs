@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use anyhow::{anyhow, bail, Error, Ok};
 use ndarray::Array2;
 
@@ -119,11 +120,11 @@ fn find_contacts(
     assert_eq!(grid[pos], '[');
     out.push(pos);
 
-    let Some(left_pos) = tools::shift(grid, pos, dr, dc) else {
+    let Some(_left_pos) = tools::shift(grid, pos, dr, dc) else {
         return;
     };
 
-    let Some(right_pos) = tools::shift(grid, (pos.0, pos.1 + 1), dr, dc) else {
+    let Some(_right_pos) = tools::shift(grid, (pos.0, pos.1 + 1), dr, dc) else {
         return;
     };
 }

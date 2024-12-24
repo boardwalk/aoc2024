@@ -1,5 +1,6 @@
 use anyhow::{anyhow, bail, Error};
 use ndarray::Array2;
+use std::fmt::{Display, Write as _};
 
 #[derive(Default)]
 struct GridShape {
@@ -57,4 +58,21 @@ pub fn load_grid(rd: impl std::io::BufRead) -> Result<(Array2<char>, Option<Stri
     let shape = grid_shape.calc()?;
     let grid = Array2::from_shape_vec(shape, data).map_err(|_| anyhow!("bad array shape"))?;
     Ok((grid, extra))
+}
+
+pub fn print_grid(grid: &Array2<impl Display>) {
+    let mut row_buf = String::new();
+
+    for (pos, val) in grid.indexed_iter() {
+        if pos.1 < row_buf.len() {
+            println!("{row_buf}");
+            row_buf.clear();
+        }
+
+        write!(&mut row_buf, "{val}").unwrap();
+    }
+
+    if !row_buf.is_empty() {
+        println!("{row_buf}");
+    }
 }

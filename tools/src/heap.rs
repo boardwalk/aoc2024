@@ -1,6 +1,3 @@
-use std::fmt::Debug;
-use std::io::Write;
-
 fn parent(idx: usize) -> Option<usize> {
     if idx > 0 {
         Some((idx - 1) / 2)
@@ -19,7 +16,7 @@ fn right_child(idx: usize) -> usize {
 
 // move an element in the tree up as needed
 // this is a max heap (biggest element at root)
-pub fn sift_up(heap: &mut [impl Ord + Debug], mut cur_idx: usize) -> usize {
+pub fn sift_up(heap: &mut [impl Ord], mut cur_idx: usize) -> usize {
     loop {
         let Some(parent_idx) = parent(cur_idx) else {
             return cur_idx;
@@ -36,7 +33,7 @@ pub fn sift_up(heap: &mut [impl Ord + Debug], mut cur_idx: usize) -> usize {
 
 // move an element in the tree down as needed
 // this is a max heap (biggest element at root)
-pub fn sift_down(heap: &mut [impl Ord + Debug], cur_idx: usize) {
+pub fn sift_down(heap: &mut [impl Ord], cur_idx: usize) {
     let left_child_idx = left_child(cur_idx);
     let right_child_idx = right_child(cur_idx);
 
@@ -56,7 +53,7 @@ pub fn sift_down(heap: &mut [impl Ord + Debug], cur_idx: usize) {
     }
 }
 
-fn heap_validate(heap: &[impl Ord + Debug], cur_idx: usize) -> bool {
+fn heap_validate(heap: &[impl Ord], cur_idx: usize) -> bool {
     // check left subtree
     let left_idx = left_child(cur_idx);
     let right_idx = left_child(cur_idx);
@@ -77,7 +74,7 @@ fn heap_validate(heap: &[impl Ord + Debug], cur_idx: usize) -> bool {
     true
 }
 
-pub fn heap_push<T: Ord + Debug>(heap: &mut Vec<T>, elem: T) -> usize {
+pub fn heap_push<T: Ord>(heap: &mut Vec<T>, elem: T) -> usize {
     let mut cur_idx = heap.len();
     heap.push(elem);
 
@@ -86,23 +83,19 @@ pub fn heap_push<T: Ord + Debug>(heap: &mut Vec<T>, elem: T) -> usize {
     cur_idx
 }
 
-pub fn heap_pop<T: Ord + Debug>(heap: &mut Vec<T>) -> Option<T> {
+pub fn heap_pop<T: Ord>(heap: &mut Vec<T>) -> Option<T> {
     if heap.is_empty() {
         return None;
     }
 
     let elem = heap.swap_remove(0);
-
     sift_down(heap, 0);
-
-    std::io::stdout().flush().unwrap();
     assert!(heap_validate(heap, 0));
     assert!(heap.iter().all(|e| *e >= elem));
     Some(elem)
 }
 
-pub fn heap_decrease<T: Ord + Debug>(heap: &mut [T], cur_idx: usize) -> usize {
-    panic!("xx");
+pub fn heap_decrease<T: Ord>(heap: &mut [T], cur_idx: usize) -> usize {
     let cur_idx = sift_up(heap, cur_idx);
     assert!(heap_validate(heap, 0));
 
