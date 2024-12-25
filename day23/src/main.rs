@@ -5,11 +5,15 @@ use std::io::BufRead;
 #[derive(Debug)]
 struct Network {
     host_names: Vec<String>,
-    //  a list of adjacent hosts, indexed by host id
+    //  a sorted list of adjacent hosts, indexed by host id
     adjacent: Vec<Vec<usize>>,
 }
 
 impl Network {
+    fn len(&self) -> usize {
+        self.adjacent.len()
+    }
+
     fn is_adjacent(&self, host_a: usize, host_b: usize) -> bool {
         self.adjacent[host_a].binary_search(&host_b).is_ok()
     }
@@ -29,9 +33,9 @@ fn get_host_id(host_ids: &mut HashMap<String, usize>, host: &str) -> usize {
 fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
     let mut clusters = Vec::new();
     // look through all 3 tuples of hosts an add those that are interconnected.
-    for host_a in 0..network.host_names.len() {
-        for host_b in host_a + 1..network.host_names.len() {
-            for host_c in host_b + 1..network.host_names.len() {
+    for host_a in 0..network.len() {
+        for host_b in host_a + 1..network.len() {
+            for host_c in host_b + 1..network.len() {
                 // filter out tuples that are not interconnected
                 if !network.is_adjacent(host_a, host_b)
                     || !network.is_adjacent(host_b, host_c)
