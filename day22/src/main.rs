@@ -1,6 +1,14 @@
 #![feature(iterator_try_collect)]
+#![feature(coroutines)]
+#![feature(coroutine_trait)]
+
+const PART_TWO: bool = true;
 
 use anyhow::Error;
+use indicatif::ParallelProgressIterator;
+use rayon::prelude::*;
+use std::ops::Coroutine;
+use std::pin::Pin;
 use std::str::FromStr as _;
 
 fn mix(secret_num: usize, value: usize) -> usize {
@@ -36,10 +44,111 @@ fn gen_many_vec(mut secret_num: usize, count: usize) -> Vec<usize> {
     res
 }
 
+struct IterCoro<T> {
+    coro: Option<T>,
+}
+
+impl<T> Iterator for IterCoro<T>
+where
+    T: Coroutine + Unpin,
+{
+    type Item = T::Yield;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let coro = self.coro.as_mut()?;
+
+        match Pin::new(coro).resume(()) {
+            std::ops::CoroutineState::Yielded(val) => Some(val),
+            std::ops::CoroutineState::Complete(_) => {
+                self.coro = None;
+                None
+            }
+        }
+    }
+}
+
+fn iter_coro<T>(coro: T) -> IterCoro<T>
+where
+    T: Coroutine,
+{
+    IterCoro { coro: Some(coro) }
+}
+
+fn iter_change_sequences() -> impl Iterator<Item = [i64; 4]> {
+    // some of these aren't possible, but that's fine, evaling them is just a waste of time
+    iter_coro(
+        #[coroutine]
+        || {
+            for c1 in -9..=9 {
+                for c2 in -9..=9 {
+                    for c3 in -9..=9 {
+                        for c4 in -9..=9 {
+                            yield [c1, c2, c3, c4];
+                        }
+                    }
+                }
+            }
+        },
+    )
+}
+
+fn eval_change_sequence(expected_seq: [i64; 4], mut secret_num: usize) -> Option<i64> {
+    let mut actual_seq: [i64; 4] = [0, 0, 0, 0];
+    let mut begin_i = 0;
+    let mut end_i = 0;
+
+    for _i in 0..2000 {
+        let prev_price = i64::try_from(secret_num % 10).unwrap();
+        secret_num = next_secret_num(secret_num);
+        let this_price = i64::try_from(secret_num % 10).unwrap();
+        let price_delta = this_price - prev_price;
+
+        // pop delta
+        if end_i - begin_i >= 4 {
+            begin_i += 1;
+        }
+
+        // push_delta
+        actual_seq[end_i % 4] = price_delta;
+        end_i += 1;
+
+        // println!("i = {i} secret_num = {secret_num}, prev_price = {prev_price}, this_price = {this_price}, actual_seq = {actual_seq:?}");
+
+        // compare if we have 4 things to compare
+        if end_i - begin_i >= 4 {
+            let mut matched = true;
+            for j in 0..4 {
+                let actual_price = actual_seq[(begin_i + j) % 4];
+                let expected_price = expected_seq[j];
+                if actual_price != expected_price {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if matched {
+                return Some(this_price);
+            }
+            //todo
+        }
+    }
+
+    None
+}
+
+fn eval_change_sequence_all(expected_seq: [i64; 4], buyers: &[usize]) -> i64 {
+    let mut tot = 0;
+
+    for buyer in buyers {
+        tot += eval_change_sequence(expected_seq, *buyer).unwrap_or_default();
+    }
+
+    tot
+}
+
 fn main() -> Result<(), Error> {
     assert_eq!(prune(100000000), 16113920);
     assert_eq!(mix(42, 15), 37);
-
     assert_eq!(
         gen_many_vec(123, 10),
         &[
@@ -48,22 +157,44 @@ fn main() -> Result<(), Error> {
         ]
     );
 
+    assert_eq!(eval_change_sequence([-2, 1, -1, 3], 1), Some(7));
+
+    assert_eq!(eval_change_sequence([-2, 1, -1, 3], 2), Some(7));
+
+    assert_eq!(eval_change_sequence([-2, 1, -1, 3], 3), None);
+
+    assert_eq!(eval_change_sequence([-2, 1, -1, 3], 2024), Some(9));
+    assert_eq!(
+        eval_change_sequence_all([-2, 1, -1, 3], &[1, 2, 3, 2024]),
+        23
+    );
+
     let buyers: Vec<_> = std::io::stdin().lines().try_collect()?;
     let buyers: Vec<_> = buyers.iter().map(|ln| usize::from_str(ln)).try_collect()?;
 
-    let mut sum = 0;
+    if PART_TWO {
+        let seauences: Vec<_> = iter_change_sequences().collect();
+        let val = seauences
+            .into_par_iter()
+            .map(|seq| eval_change_sequence_all(seq, &buyers))
+            .progress()
+            .max();
+        println!("{val:?}");
+    } else {
+        let mut sum = 0;
 
-    for buyer in &buyers {
-        let mut secret_num = *buyer;
+        for buyer in &buyers {
+            let mut secret_num = *buyer;
 
-        for _i in 0..2000 {
-            secret_num = next_secret_num(secret_num);
+            for _i in 0..2000 {
+                secret_num = next_secret_num(secret_num);
+            }
+
+            sum += secret_num;
         }
 
-        sum += secret_num;
+        println!("{sum}");
     }
-
-    println!("{sum}");
 
     Ok(())
 }
