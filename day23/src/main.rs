@@ -1,12 +1,12 @@
 use anyhow::{anyhow, Error};
-use ndarray::Array2;
-use std::collections::{hash_set, HashMap, HashSet};
+use std::collections::HashMap;
 use std::io::BufRead;
 
 #[derive(Debug)]
 struct Network {
     host_names: Vec<String>,
-    adj_hosts: Array2<bool>,
+    //  a list of adjacent hosts, indexed by host id
+    adjacent: Vec<Vec<usize>>,
 }
 
 fn get_host_id(host_ids: &mut HashMap<String, usize>, host: &str) -> usize {
@@ -27,9 +27,9 @@ fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
         for host_b in host_a + 1..network.host_names.len() {
             for host_c in host_b + 1..network.host_names.len() {
                 // filter out tuples that are not interconnected
-                if !network.adj_hosts[(host_a, host_b)]
-                    || !network.adj_hosts[(host_b, host_c)]
-                    || !network.adj_hosts[(host_a, host_c)]
+                if !network.adjacent[host_a].contains(&host_b)
+                    || !network.adjacent[host_b].contains(&host_c)
+                    || !network.adjacent[host_c].contains(&host_a)
                 {
                     continue;
                 }
@@ -53,7 +53,8 @@ fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
 fn read_network(rd: impl BufRead) -> Result<Network, Error> {
     let mut host_ids = HashMap::new();
 
-    let mut edges: Vec<(usize, usize)> = Vec::new();
+    // keyed by host id
+    let mut adjacent: Vec<Vec<usize>> = Vec::new();
 
     for ln in rd.lines() {
         let ln = ln?;
@@ -64,15 +65,18 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
         let host_b = &ln[delim + 1..];
         let host_a = get_host_id(&mut host_ids, host_a);
         let host_b = get_host_id(&mut host_ids, host_b);
-        edges.push((host_a, host_b));
-    }
 
-    let mut adj_hosts = Array2::default((host_ids.len(), host_ids.len()));
+        if host_a >= adjacent.len() {
+            adjacent.push(Vec::new());
+        }
 
-    for (host_a_id, host_b_id) in edges.into_iter() {
+        if host_b >= adjacent.len() {
+            adjacent.push(Vec::new());
+        }
+
         // mark hosts as adjacent in both directions
-        adj_hosts[(host_a_id, host_b_id)] = true;
-        adj_hosts[(host_b_id, host_a_id)] = true;
+        adjacent[host_a].push(host_b);
+        adjacent[host_b].push(host_a);
     }
 
     // convert host_ids to host_names
@@ -85,7 +89,7 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
 
     Ok(Network {
         host_names,
-        adj_hosts,
+        adjacent,
     })
 }
 
