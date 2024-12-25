@@ -9,6 +9,12 @@ struct Network {
     adjacent: Vec<Vec<usize>>,
 }
 
+impl Network {
+    fn is_adjacent(&self, host_a: usize, host_b: usize) -> bool {
+        self.adjacent[host_a].binary_search(&host_b).is_ok()
+    }
+}
+
 fn get_host_id(host_ids: &mut HashMap<String, usize>, host: &str) -> usize {
     match host_ids.get(host) {
         Some(id) => *id,
@@ -27,9 +33,9 @@ fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
         for host_b in host_a + 1..network.host_names.len() {
             for host_c in host_b + 1..network.host_names.len() {
                 // filter out tuples that are not interconnected
-                if !network.adjacent[host_a].contains(&host_b)
-                    || !network.adjacent[host_b].contains(&host_c)
-                    || !network.adjacent[host_c].contains(&host_a)
+                if !network.is_adjacent(host_a, host_b)
+                    || !network.is_adjacent(host_b, host_c)
+                    || !network.is_adjacent(host_c, host_a)
                 {
                     continue;
                 }
@@ -47,6 +53,7 @@ fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
             }
         }
     }
+
     clusters
 }
 
@@ -85,6 +92,11 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
 
     for (name, id) in host_ids.into_iter() {
         host_names[id] = name;
+    }
+
+    // sort lists so we can use binary search
+    for lst in &mut adjacent {
+        lst.sort_unstable();
     }
 
     Ok(Network {
