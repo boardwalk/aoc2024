@@ -150,7 +150,7 @@ fn propagate(wire_values: &[Option<bool>], gate: &Gate) -> Option<bool> {
     Some(val)
 }
 
-fn solve_circuit(circuit: &Circuit) -> Result<Vec<bool>, Error> {
+fn solve_circuit(circuit: &Circuit) -> Result<Vec<Option<bool>>, Error> {
     let mut wire_values = circuit.initial_state.clone();
     let mut remaining = wire_values.iter().filter(|v| v.is_none()).count();
     while remaining > 0 {
@@ -170,21 +170,29 @@ fn solve_circuit(circuit: &Circuit) -> Result<Vec<bool>, Error> {
         remaining = new_remaining;
     }
 
-    let wires = wire_values.into_iter().map(Option::unwrap).collect();
-
-    Ok(wires)
+    Ok(wire_values)
 }
 
-fn get_value(wire_values: &[bool], wire_ids: &[usize]) -> usize {
-    let mut output = 0;
+fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> usize {
+    let mut value = 0;
 
-    for src_wire in wire_ids {
-        let val = wire_values[*src_wire];
+    for wire_id in wire_ids {
+        let val = wire_values[*wire_id].unwrap();
         let val = usize::from(val);
-        output = output * 2 + val;
+        value = value * 2 + val;
     }
 
-    output
+    value
+}
+
+fn set_value(wire_values: &mut [Option<bool>], wire_ids: &[usize], mut value: usize) {
+    for wire_id in wire_ids {
+        assert!(wire_values[*wire_id].is_none());
+        wire_values[*wire_id] = Some((value % 2) != 0);
+        value /= 2;
+    }
+
+    assert!(value == 0);
 }
 
 fn main() -> Result<(), Error> {
