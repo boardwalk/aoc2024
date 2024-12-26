@@ -198,7 +198,10 @@ fn set_value(wire_values: &mut [Option<bool>], wire_ids: &[usize], mut value: us
 fn main() -> Result<(), Error> {
     let circuit = read_circuit(std::io::stdin().lock())?;
     let wire_values = solve_circuit(&circuit)?;
-    let output = get_value(&wire_values, &circuit.z_wire_ids);
-    println!("{output}");
+    let x = get_value(&wire_values, &circuit.x_wire_ids);
+    let y = get_value(&wire_values, &circuit.y_wire_ids);
+    let z = get_value(&wire_values, &circuit.z_wire_ids);
+
+    println!("x = {x}, y = {y}, z = {z}");
     Ok(())
 }
