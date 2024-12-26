@@ -19,9 +19,12 @@ struct Gate {
 
 #[derive(Debug)]
 struct Circuit {
-    wires: HashMap<String, usize>,
+    num_wires: usize,
     initial_values: HashMap<usize, bool>,
     gates: Vec<Gate>,
+    x_wires: Vec<usize>,
+    y_wires: Vec<usize>,
+    z_wires: Vec<usize>,
 }
 
 fn get_wire_id(wires: &mut HashMap<String, usize>, name: &str) -> usize {
@@ -33,6 +36,18 @@ fn get_wire_id(wires: &mut HashMap<String, usize>, name: &str) -> usize {
             id
         }
     }
+}
+
+fn get_io_wires(wires: &HashMap<String, usize>, prefix: &str) -> Vec<usize> {
+    let mut z_names: Vec<_> = wires
+        .iter()
+        .filter(|(name, _id)| name.starts_with(prefix))
+        .collect();
+
+    z_names.sort_by_key(|(name, _id)| *name);
+    z_names.reverse();
+
+    z_names.iter().map(|(_name, id)| **id).collect()
 }
 
 fn parse_gate(s: &str, wires: &mut HashMap<String, usize>) -> Result<Gate, Error> {
@@ -105,10 +120,17 @@ fn read_circuit(rd: impl BufRead) -> Result<Circuit, Error> {
         }
     }
 
+    let x_wires = get_io_wires(&wires, "x");
+    let y_wires = get_io_wires(&wires, "y");
+    let z_wires = get_io_wires(&wires, "z");
+
     Ok(Circuit {
-        wires,
+        num_wires: wires.len(),
         initial_values,
         gates,
+        x_wires,
+        y_wires,
+        z_wires,
     })
 }
 
@@ -126,14 +148,14 @@ fn propagate(wires: &[Option<bool>], gate: &Gate) -> Option<bool> {
 }
 
 fn solve_circuit(circuit: &Circuit) -> Result<Vec<bool>, Error> {
-    let mut wires: Vec<Option<bool>> = vec![None; circuit.wires.len()];
+    let mut wires: Vec<Option<bool>> = vec![None; circuit.num_wires];
 
     // fill in initial values
     for (wire_id, val) in &circuit.initial_values {
         wires[*wire_id] = Some(*val);
     }
 
-    let mut remaining = circuit.wires.len() - circuit.initial_values.len();
+    let mut remaining = circuit.num_wires - circuit.initial_values.len();
     while remaining > 0 {
         let mut new_remaining = remaining;
         for gate in &circuit.gates {
@@ -157,20 +179,10 @@ fn solve_circuit(circuit: &Circuit) -> Result<Vec<bool>, Error> {
 }
 
 fn calculate(wires: &[bool], circuit: &Circuit) -> usize {
-    let mut z_names: Vec<_> = circuit
-        .wires
-        .keys()
-        .filter(|s| s.starts_with("z"))
-        .collect();
-
-    z_names.sort();
-    z_names.reverse();
-
     let mut output = 0;
 
-    for z_name in &z_names {
-        let wire_id = circuit.wires.get(*z_name).copied().unwrap();
-        let val = wires[wire_id];
+    for io_wire in &circuit.z_wires {
+        let val = wires[*io_wire];
         let val = usize::from(val);
         output = output * 2 + val;
     }
