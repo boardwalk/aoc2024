@@ -19,8 +19,7 @@ struct Gate {
 
 #[derive(Debug)]
 struct Circuit {
-    num_wires: usize,
-    initial_values: HashMap<usize, bool>,
+    initial_state: Vec<Option<bool>>,
     gates: Vec<Gate>,
     x_wires: Vec<usize>,
     y_wires: Vec<usize>,
@@ -124,13 +123,17 @@ fn read_circuit(rd: impl BufRead) -> Result<Circuit, Error> {
     let y_wires = get_io_wires(&wires, "y");
     let z_wires = get_io_wires(&wires, "z");
 
+    let mut initial_state = vec![None; wires.len()];
+    for (id, val) in &initial_values {
+        initial_state[*id] = Some(*val);
+    }
+
     Ok(Circuit {
-        num_wires: wires.len(),
-        initial_values,
         gates,
         x_wires,
         y_wires,
         z_wires,
+        initial_state,
     })
 }
 
@@ -148,14 +151,8 @@ fn propagate(wires: &[Option<bool>], gate: &Gate) -> Option<bool> {
 }
 
 fn solve_circuit(circuit: &Circuit) -> Result<Vec<bool>, Error> {
-    let mut wires: Vec<Option<bool>> = vec![None; circuit.num_wires];
-
-    // fill in initial values
-    for (wire_id, val) in &circuit.initial_values {
-        wires[*wire_id] = Some(*val);
-    }
-
-    let mut remaining = circuit.num_wires - circuit.initial_values.len();
+    let mut wires = circuit.initial_state.clone();
+    let mut remaining = wires.iter().filter(|v| v.is_none()).count();
     while remaining > 0 {
         let mut new_remaining = remaining;
         for gate in &circuit.gates {
