@@ -1,21 +1,31 @@
+#![feature(get_many_mut)]
 use anyhow::{anyhow, Error};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::BufRead;
+
+const PART_TWO: bool = false;
 
 #[derive(Debug)]
 struct Network {
     host_names: Vec<String>,
-    //  a sorted list of adjacent hosts, indexed by host id
-    adjacent: Vec<Vec<usize>>,
+    adjacent: HashSet<(usize, usize)>,
+}
+
+fn get_key(mut host_a: usize, mut host_b: usize) -> (usize, usize) {
+    if host_a > host_b {
+        std::mem::swap(&mut host_a, &mut host_b);
+    }
+
+    (host_a, host_b)
 }
 
 impl Network {
     fn len(&self) -> usize {
-        self.adjacent.len()
+        self.host_names.len()
     }
 
     fn is_adjacent(&self, host_a: usize, host_b: usize) -> bool {
-        self.adjacent[host_a].binary_search(&host_b).is_ok()
+        self.adjacent.contains(&get_key(host_a, host_b))
     }
 }
 
@@ -30,42 +40,38 @@ fn get_host_id(host_ids: &mut HashMap<String, usize>, host: &str) -> usize {
     }
 }
 
-fn find_clusters(network: &Network) -> Vec<[usize; 3]> {
-    let mut clusters = Vec::new();
-    // look through all 3 tuples of hosts an add those that are interconnected.
-    for host_a in 0..network.len() {
-        for host_b in host_a + 1..network.len() {
-            for host_c in host_b + 1..network.len() {
-                // filter out tuples that are not interconnected
-                if !network.is_adjacent(host_a, host_b)
-                    || !network.is_adjacent(host_b, host_c)
-                    || !network.is_adjacent(host_c, host_a)
-                {
-                    continue;
-                }
+fn find_cluster(host_id: usize, network: &Network) -> HashSet<usize> {
+    let mut cluster = HashSet::new();
 
-                // filter out tuples where none of the hosts starts with t
-                if !network.host_names[host_a].starts_with('t')
-                    && !network.host_names[host_b].starts_with('t')
-                    && !network.host_names[host_c].starts_with('t')
-                {
-                    continue;
-                }
+    cluster.insert(host_id);
 
-                // these will always be in order
-                clusters.push([host_a, host_b, host_c]);
+    loop {
+        let mut changed = false;
+        println!("loop with {}", cluster.len());
+
+        for host_id_2 in 0..network.len() {
+            if cluster
+                .iter()
+                .all(|host_id| network.is_adjacent(host_id_2, *host_id))
+            {
+                cluster.insert(host_id_2);
+                changed = true;
             }
+        }
+
+        if !changed {
+            break;
         }
     }
 
-    clusters
+    cluster
 }
 
 fn read_network(rd: impl BufRead) -> Result<Network, Error> {
     let mut host_ids = HashMap::new();
 
     // keyed by host id
-    let mut adjacent: Vec<Vec<usize>> = Vec::new();
+    let mut adjacent = HashSet::new();
 
     for ln in rd.lines() {
         let ln = ln?;
@@ -77,17 +83,7 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
         let host_a = get_host_id(&mut host_ids, host_a);
         let host_b = get_host_id(&mut host_ids, host_b);
 
-        if host_a >= adjacent.len() {
-            adjacent.push(Vec::new());
-        }
-
-        if host_b >= adjacent.len() {
-            adjacent.push(Vec::new());
-        }
-
-        // mark hosts as adjacent in both directions
-        adjacent[host_a].push(host_b);
-        adjacent[host_b].push(host_a);
+        adjacent.insert(get_key(host_a, host_b));
     }
 
     // convert host_ids to host_names
@@ -98,11 +94,6 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
         host_names[id] = name;
     }
 
-    // sort lists so we can use binary search
-    for lst in &mut adjacent {
-        lst.sort_unstable();
-    }
-
     Ok(Network {
         host_names,
         adjacent,
@@ -111,19 +102,11 @@ fn read_network(rd: impl BufRead) -> Result<Network, Error> {
 
 fn main() -> Result<(), Error> {
     let network = read_network(std::io::stdin().lock())?;
-    // println!("{network:?}");
 
-    let clusters = find_clusters(&network);
-    println!("{}", clusters.len());
+    for host_id in 0..network.len() {
+        let c = find_cluster(host_id, &network);
+        println!("{c:?}");
+    }
+
     Ok(())
 }
-
-// start with Vec<Vec<usize>>
-// outer is all clusters indexed by host_id (smallest host id in the set maybe?)
-// inner is a list of host ids for for hosts in the cluster (sorted if needed
-// initial state is a cluster of size 1 for each host id
-// iteratively combine clusters of size 1 into into clusters of size 2, and so on
-// if a cluster is too small for and doesn't connect to a cluster of the larger size, that cluster goes away
-// (the whole cluster is not part of the set of largest if any other cluster is larger)
-// continue until trying to merge/grow clusters would mean removing all remaining cluster
-// what is left before that are clusters of the largest size
