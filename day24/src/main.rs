@@ -39,7 +39,7 @@ fn parse_gate(s: &str, wires: &mut HashMap<String, usize>) -> Result<Gate, Error
     let tokens: Vec<_> = s.split_ascii_whitespace().collect();
 
     if tokens.len() != 5 {
-        bail!("invalid gate")
+        bail!("gate not enough tokens")
     }
 
     let left_input = get_wire_id(wires, tokens[0]);
@@ -47,12 +47,12 @@ fn parse_gate(s: &str, wires: &mut HashMap<String, usize>) -> Result<Gate, Error
         "AND" => Operator::And,
         "OR" => Operator::Or,
         "XOR" => Operator::Xor,
-        _ => bail!("invalid operator"),
+        _ => bail!("gate invalid operator"),
     };
 
     let right_input = get_wire_id(wires, tokens[2]);
     if tokens[3] != "->" {
-        bail!("missing gate arrow");
+        bail!("gate missing arrow");
     }
 
     let output = get_wire_id(wires, tokens[4]);
