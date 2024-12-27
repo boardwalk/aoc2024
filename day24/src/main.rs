@@ -19,11 +19,13 @@ struct Gate {
 
 #[derive(Debug)]
 struct Circuit {
+    wire_to_name: Vec<String>,
     initial_state: Vec<Option<bool>>,
     gates: Vec<Gate>,
     x_wire_ids: Vec<usize>,
     y_wire_ids: Vec<usize>,
     z_wire_ids: Vec<usize>,
+    wire_to_gate: Vec<Option<usize>>,
 }
 
 fn get_wire_id(wire_ids: &mut HashMap<String, usize>, name: &str) -> usize {
@@ -128,12 +130,46 @@ fn read_circuit(rd: impl BufRead) -> Result<Circuit, Error> {
         initial_state[*id] = Some(*val);
     }
 
+    let mut wire_names = Vec::new();
+    wire_names.resize_with(wire_ids.len(), Default::default);
+
+    let mut wire_to_gate = Vec::new();
+    wire_to_gate.resize_with(wire_ids.len(), Default::default);
+
+    // fill in wire_names
+    for (name, id) in wire_ids.into_iter() {
+        wire_names[id] = name;
+    }
+
+    // fill in wire_to_gate
+    for wire_id in 0..wire_names.len() {
+        // don't try going upstream from input gates
+        if x_wire_ids.contains(&wire_id) || y_wire_ids.contains(&wire_id) {
+            continue;
+        }
+
+        let mut found = false;
+        for gate_id in 0..gates.len() {
+            if gates[gate_id].output_wire_id == wire_id {
+                wire_to_gate[wire_id] = Some(gate_id);
+                found = true;
+                break;
+            }
+        }
+
+        if !found {
+            panic!("no upstream gate for wire {}", wire_names[wire_id]);
+        }
+    }
+
     Ok(Circuit {
+        wire_to_name: wire_names,
         gates,
         x_wire_ids,
         y_wire_ids,
         z_wire_ids,
         initial_state,
+        wire_to_gate,
     })
 }
 
@@ -185,23 +221,12 @@ fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> usize {
     value
 }
 
-fn set_value(wire_values: &mut [Option<bool>], wire_ids: &[usize], mut value: usize) {
-    for wire_id in wire_ids {
-        assert!(wire_values[*wire_id].is_none());
-        wire_values[*wire_id] = Some((value % 2) != 0);
-        value /= 2;
-    }
-
-    assert!(value == 0);
-}
-
 fn main() -> Result<(), Error> {
     let circuit = read_circuit(std::io::stdin().lock())?;
     let wire_values = solve_circuit(&circuit)?;
     let x = get_value(&wire_values, &circuit.x_wire_ids);
     let y = get_value(&wire_values, &circuit.y_wire_ids);
     let z = get_value(&wire_values, &circuit.z_wire_ids);
-
     println!("x = {x}, y = {y}, z = {z}");
     Ok(())
 }
