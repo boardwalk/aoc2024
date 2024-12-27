@@ -123,8 +123,31 @@ fn parse_keylocks(rd: impl BufRead) -> Result<Vec<KeyLock>, Error> {
     Ok(key_locks)
 }
 
+fn fits(a: &KeyLock, b: &KeyLock) -> bool {
+    if !(a.is_lock ^ b.is_lock) {
+        return false;
+    }
+
+    a.heights
+        .iter()
+        .zip(b.heights.iter())
+        .all(|(a, b)| a + b <= 5)
+}
+
 fn main() -> Result<(), Error> {
     let key_locks = parse_keylocks(std::io::stdin().lock())?;
-    assert_eq!(key_locks, SAMPLE_KEY_LOCKS);
+    // assert_eq!(key_locks, SAMPLE_KEY_LOCKS);
+
+    let mut num_fit = 0;
+
+    for i in 0..key_locks.len() {
+        for j in i + 1..key_locks.len() {
+            if fits(&key_locks[i], &key_locks[j]) || fits(&key_locks[j], &key_locks[i]) {
+                num_fit += 1;
+            }
+        }
+    }
+
+    println!("{num_fit}");
     Ok(())
 }
