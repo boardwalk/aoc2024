@@ -186,7 +186,7 @@ fn propagate(wire_values: &[Option<bool>], gate: &Gate) -> Option<bool> {
     Some(val)
 }
 
-fn solve_circuit(circuit: &Circuit) -> Result<Vec<Option<bool>>, Error> {
+fn solve_circuit(circuit: &Circuit) -> Vec<Option<bool>> {
     let mut wire_values = circuit.initial_state.clone();
     let mut remaining = wire_values.iter().filter(|v| v.is_none()).count();
     while remaining > 0 {
@@ -201,32 +201,33 @@ fn solve_circuit(circuit: &Circuit) -> Result<Vec<Option<bool>>, Error> {
         }
 
         if new_remaining == remaining {
-            bail!("did not make progress");
+            break;
         }
+
         remaining = new_remaining;
     }
 
-    Ok(wire_values)
+    wire_values
 }
 
-fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> usize {
+fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> Option<usize> {
     let mut value = 0;
 
     for wire_id in wire_ids {
-        let val = wire_values[*wire_id].unwrap();
+        let val = wire_values[*wire_id]?;
         let val = usize::from(val);
         value = value * 2 + val;
     }
 
-    value
+    Some(value)
 }
 
 fn main() -> Result<(), Error> {
     let circuit = read_circuit(std::io::stdin().lock())?;
-    let wire_values = solve_circuit(&circuit)?;
+    let wire_values = solve_circuit(&circuit);
     let x = get_value(&wire_values, &circuit.x_wire_ids);
     let y = get_value(&wire_values, &circuit.y_wire_ids);
     let z = get_value(&wire_values, &circuit.z_wire_ids);
-    println!("x = {x}, y = {y}, z = {z}");
+    println!("x = {x:?}, y = {y:?}, z = {z:?}");
     Ok(())
 }
