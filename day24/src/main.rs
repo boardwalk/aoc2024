@@ -186,8 +186,7 @@ fn propagate(wire_values: &[Option<bool>], gate: &Gate) -> Option<bool> {
     Some(val)
 }
 
-fn solve_circuit(circuit: &Circuit) -> Vec<Option<bool>> {
-    let mut wire_values = circuit.initial_state.clone();
+fn solve_circuit(circuit: &Circuit, wire_values: &mut [Option<bool>]) {
     let mut remaining = wire_values.iter().filter(|v| v.is_none()).count();
     while remaining > 0 {
         let mut new_remaining = remaining;
@@ -206,8 +205,6 @@ fn solve_circuit(circuit: &Circuit) -> Vec<Option<bool>> {
 
         remaining = new_remaining;
     }
-
-    wire_values
 }
 
 fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> Option<usize> {
@@ -224,7 +221,8 @@ fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> Option<usize> 
 
 fn main() -> Result<(), Error> {
     let circuit = read_circuit(std::io::stdin().lock())?;
-    let wire_values = solve_circuit(&circuit);
+    let mut wire_values = circuit.initial_state.clone();
+    solve_circuit(&circuit, &mut wire_values);
     let x = get_value(&wire_values, &circuit.x_wire_ids);
     let y = get_value(&wire_values, &circuit.y_wire_ids);
     let z = get_value(&wire_values, &circuit.z_wire_ids);
