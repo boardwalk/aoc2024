@@ -1,6 +1,9 @@
+#![feature(get_many_mut)]
 use anyhow::{anyhow, bail, Error};
 use std::collections::HashMap;
 use std::io::BufRead;
+
+const PART_TWO: bool = true;
 
 #[derive(Clone, Copy, Debug)]
 pub enum Operator {
@@ -26,6 +29,7 @@ struct Circuit {
     y_wire_ids: Vec<usize>,
     z_wire_ids: Vec<usize>,
     wire_to_gate: Vec<Option<usize>>,
+    max_adder_len: usize,
 }
 
 fn get_wire_id(wire_ids: &mut HashMap<String, usize>, name: &str) -> usize {
@@ -170,6 +174,7 @@ fn read_circuit(rd: impl BufRead) -> Result<Circuit, Error> {
         z_wire_ids,
         initial_state,
         wire_to_gate,
+        max_adder_len: 0,
     })
 }
 
@@ -219,13 +224,213 @@ fn get_value(wire_values: &[Option<bool>], wire_ids: &[usize]) -> Option<usize> 
     Some(value)
 }
 
+fn format_wire_list(circuit: &Circuit, wire_ids: &[usize]) -> String {
+    let mut s = String::new();
+
+    for wire_id in wire_ids {
+        if !s.is_empty() {
+            s.push(',');
+        }
+
+        s.push_str(&circuit.wire_to_name[*wire_id]);
+    }
+
+    s
+}
+
+fn clear_wire_values(wire_values: &mut [Option<bool>]) {
+    wire_values.fill(None);
+}
+
+fn set_wire_values(wire_ids: &[usize], mut val: usize, wire_values: &mut [Option<bool>]) {
+    for wire_id in wire_ids.iter().rev() {
+        let val_bool = (val & 1) != 0;
+        val >>= 1;
+        wire_values[*wire_id] = Some(val_bool);
+    }
+    assert_eq!(val, 0);
+}
+
+fn value_fits(val: usize, wire_ids: &[usize]) -> bool {
+    let biggest_val = (1 << wire_ids.len()) - 1;
+
+    val <= biggest_val
+}
+
+fn is_adder_one(
+    circuit: &Circuit,
+    wire_values: &mut [Option<bool>],
+    x: usize,
+    y: usize,
+    x_wires: &[usize],
+    y_wires: &[usize],
+    z_wires: &[usize],
+) -> bool {
+    if !value_fits(x, x_wires) {
+        return true;
+    }
+
+    if !value_fits(y, y_wires) {
+        return true;
+    }
+
+    clear_wire_values(wire_values);
+    set_wire_values(x_wires, x, wire_values);
+    set_wire_values(y_wires, y, wire_values);
+
+    solve_circuit(circuit, wire_values);
+    let z = get_value(wire_values, z_wires);
+
+    // println!("is_adder_one(x = {x}, y = {y}, z = {z:?})");
+
+    let Some(z) = z else {
+        return false;
+    };
+
+    x + y == z
+}
+fn last_n_wires(wire_ids: &[usize], n: usize) -> &[usize] {
+    if n < wire_ids.len() {
+        &wire_ids[(wire_ids.len() - 1 - n)..]
+    } else {
+        wire_ids
+    }
+}
+
+// verify that an adder, that has been verified to be an adder for num_bits-1 bits, is an adder as well
+fn calc_adder_size(circuit: &Circuit, wire_values: &mut [Option<bool>]) -> usize {
+    // every circuit is a 0 bit adder :d
+    for num_bits in 1..circuit.z_wire_ids.len() {
+        let x_wires = last_n_wires(&circuit.x_wire_ids, num_bits);
+        let y_wires = last_n_wires(&circuit.y_wire_ids, num_bits);
+        let z_wires = last_n_wires(&circuit.z_wire_ids, num_bits);
+
+        let test_mid = (1 << num_bits) - 1;
+        let test_lo = test_mid - 1;
+        let test_hi = test_mid + 1;
+
+        let test_vals = [test_lo, test_mid, test_hi];
+
+        for test_i in 0..test_vals.len() {
+            for test_j in test_i + 1..test_vals.len() {
+                if !is_adder_one(
+                    circuit,
+                    wire_values,
+                    test_vals[test_i],
+                    test_vals[test_j],
+                    x_wires,
+                    y_wires,
+                    z_wires,
+                ) {
+                    return num_bits;
+                }
+
+                if !is_adder_one(
+                    circuit,
+                    wire_values,
+                    test_vals[test_j],
+                    test_vals[test_i],
+                    x_wires,
+                    y_wires,
+                    z_wires,
+                ) {
+                    return num_bits;
+                }
+            }
+        }
+    }
+
+    circuit.z_wire_ids.len()
+}
+
+fn swap_outputs(circuit: &mut Circuit, i: usize, j: usize) {
+    let [i, j] = circuit.gates.get_many_mut([i, j]).unwrap();
+    std::mem::swap(&mut i.output_wire_id, &mut j.output_wire_id);
+}
+
+// try to fix the circuit by swapping gates
+// upon entry, you've everified that the circuit functions as a num_bits adder and performed the swaps in 'swaps'
+// if it returns false, the circuit can't be fixed the current swaps, and the last swap should be undone and another tried
+fn fix_circuit(
+    circuit: &mut Circuit,
+    expected_bits: usize,
+    swaps: &mut Vec<(usize, usize)>,
+    wire_values: &mut [Option<bool>],
+) -> bool {
+    // println!("on {expected_bits}");
+    let actual_bits = calc_adder_size(circuit, wire_values);
+
+    if actual_bits > circuit.max_adder_len {
+        println!("found addr of len {actual_bits}");
+        circuit.max_adder_len = actual_bits;
+    }
+
+    if actual_bits < expected_bits {
+        // we've been give a circuit that doesn't work as much as it should!
+        return false;
+    }
+
+    if actual_bits >= circuit.z_wire_ids.len() {
+        // win condition
+        return true;
+    }
+
+    for gate_i in 0..circuit.gates.len() {
+        for gate_j in gate_i + 1..circuit.gates.len() {
+            swap_outputs(circuit, gate_i, gate_j);
+            swaps.push((gate_i, gate_j));
+
+            if fix_circuit(circuit, actual_bits + 1, swaps, wire_values) {
+                // undo swaps before returning
+                // for (gate_i, gate_j) in swaps {
+                //     swap_outputs(circuit, *gate_i, *gate_j);
+                // }
+                return true;
+            }
+            // swap didn't work out somewhere down the line, undo it and try another
+            swap_outputs(circuit, gate_i, gate_j);
+            swaps.pop();
+        }
+    }
+
+    false
+}
+
+fn format_swaps(circuit: &Circuit, swaps: &[(usize, usize)]) -> String {
+    let mut names: Vec<&str> = Vec::new();
+
+    for (gate_i, gate_j) in swaps {
+        names.push(&circuit.wire_to_name[circuit.gates[*gate_i].output_wire_id]);
+        names.push(&circuit.wire_to_name[circuit.gates[*gate_j].output_wire_id]);
+    }
+
+    names.sort();
+
+    names.join(",")
+}
+
 fn main() -> Result<(), Error> {
-    let circuit = read_circuit(std::io::stdin().lock())?;
-    let mut wire_values = circuit.initial_state.clone();
-    solve_circuit(&circuit, &mut wire_values);
-    let x = get_value(&wire_values, &circuit.x_wire_ids);
-    let y = get_value(&wire_values, &circuit.y_wire_ids);
-    let z = get_value(&wire_values, &circuit.z_wire_ids);
-    println!("x = {x:?}, y = {y:?}, z = {z:?}");
+    let mut circuit = read_circuit(std::io::stdin().lock())?;
+
+    println!(
+        "{} {} {}",
+        circuit.x_wire_ids.len(),
+        circuit.y_wire_ids.len(),
+        circuit.z_wire_ids.len(),
+    );
+
+    if PART_TWO {
+        let mut swaps = Vec::new();
+        let mut wire_values: Vec<Option<bool>> = vec![None; circuit.initial_state.len()];
+        fix_circuit(&mut circuit, 0, &mut swaps, &mut wire_values);
+        println!("{}", format_swaps(&circuit, &swaps));
+    } else {
+        let mut wire_values = circuit.initial_state.clone();
+        solve_circuit(&circuit, &mut wire_values);
+        let x = get_value(&wire_values, &circuit.x_wire_ids);
+        let y = get_value(&wire_values, &circuit.y_wire_ids);
+        let z = get_value(&wire_values, &circuit.z_wire_ids);
+        println!("x = {x:?}, y = {y:?}, z = {z:?}");
+    }
     Ok(())
 }
