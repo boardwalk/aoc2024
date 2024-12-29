@@ -83,7 +83,7 @@ impl<'a> WireRef<'a> {
         })
     }
 
-    pub fn of_class(self, expected: char) -> bool {
+    pub fn has_class(self, expected: char) -> bool {
         let Some(actual) = self.circuit.wire_to_name[self.wire_id].chars().next() else {
             return false;
         };
@@ -236,7 +236,7 @@ impl Circuit {
     }
 
     pub fn bus(&self, cls: char) -> Vec<WireRef> {
-        let mut wires: Vec<_> = self.iter_wires().filter(|w| w.of_class(cls)).collect();
+        let mut wires: Vec<_> = self.iter_wires().filter(|w| w.has_class(cls)).collect();
         wires.sort_by_key(|w| w.name());
         wires
     }
