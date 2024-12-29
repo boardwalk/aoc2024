@@ -19,7 +19,8 @@ fn propagate(state: &CircuitState, gate: GateRef) -> Option<bool> {
     Some(val)
 }
 
-fn solve_circuit(circuit: &Circuit, state: &mut CircuitState) {
+#[allow(unused)]
+fn solve_circuit_slow(circuit: &Circuit, state: &mut CircuitState) {
     let mut remaining = circuit
         .iter_wires()
         .filter(|w| state.get(*w).is_none())
@@ -42,6 +43,17 @@ fn solve_circuit(circuit: &Circuit, state: &mut CircuitState) {
         }
 
         remaining = new_remaining;
+    }
+}
+
+fn solve_circuit_fast(circuit: &Circuit, state: &mut CircuitState) {
+    for gate in circuit.iter_gates() {
+        let Some(val) = propagate(state, gate) else {
+            return;
+        };
+
+        println!("solved {gate}");
+        state.set(gate.output(), val);
     }
 }
 
@@ -72,7 +84,7 @@ fn main() -> Result<(), Error> {
         // 44.5 full adders worh of and and xors
     } else {
         let mut wire_values = circuit.initial_state();
-        solve_circuit(&circuit, &mut wire_values);
+        solve_circuit_fast(&circuit, &mut wire_values);
         let x = get_value(&circuit, &wire_values, 'x');
         let y = get_value(&circuit, &wire_values, 'y');
         let z = get_value(&circuit, &wire_values, 'z');

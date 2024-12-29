@@ -123,6 +123,7 @@ pub struct Circuit {
     // for some wire, what gate has it as an output?
     // input wires will be None
     wire_to_gate: Vec<Option<usize>>,
+    gate_order: Vec<usize>,
 }
 
 impl Circuit {
@@ -184,11 +185,34 @@ impl Circuit {
             }
         }
 
+        // create a list of gates ordered by depth in circuit
+        // iterating over the gates in this order will allow you to solve it in one pass
+        let mut gate_order: Vec<usize> = (0..gates.len()).collect();
+
+        gate_order.sort_by_cached_key(|gate_id| {
+            let mut depth = 1;
+            let mut wire_queue: Vec<usize> = Vec::new();
+            let gate = &gates[*gate_id];
+            wire_queue.push(gate.left_wire_id);
+            wire_queue.push(gate.right_wire_id);
+
+            while let Some(wire_id) = wire_queue.pop() {
+                if let Some(gate_id) = wire_to_gate[wire_id] {
+                    depth += 1;
+                    let gate = &gates[gate_id];
+                    wire_queue.push(gate.left_wire_id);
+                    wire_queue.push(gate.right_wire_id);
+                }
+            }
+            depth
+        });
+
         Ok(Circuit {
             wire_to_name: wire_names,
             gates,
             initial_state,
             wire_to_gate,
+            gate_order,
         })
     }
 
@@ -211,10 +235,10 @@ impl Circuit {
         tools::iter_coro(
             #[coroutine]
             || {
-                for gate_id in 0..self.gates.len() {
+                for gate_id in &self.gate_order {
                     yield GateRef {
                         circuit: self,
-                        gate_id,
+                        gate_id: *gate_id,
                     };
                 }
             },
