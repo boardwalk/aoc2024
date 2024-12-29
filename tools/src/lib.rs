@@ -1,9 +1,12 @@
+#![feature(coroutine_trait)]
 mod grid;
 mod heap;
+mod misc;
 
 pub use grid::load_grid;
 pub use grid::print_grid;
 pub use heap::{heap_decrease, heap_pop, heap_push};
+pub use misc::iter_coro;
 
 use ndarray::Array2;
 
