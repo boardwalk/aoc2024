@@ -94,6 +94,10 @@ impl<'a> WireRef<'a> {
     pub fn name(self) -> &'a str {
         &self.circuit.wire_to_name[self.wire_id]
     }
+
+    pub fn id(self) -> usize {
+        self.wire_id
+    }
 }
 
 impl Display for GateRef<'_> {
@@ -115,6 +119,26 @@ impl Display for WireRef<'_> {
     }
 }
 
+fn get_bus_wire_ids(wire_to_name: &[String], cls: char) -> Vec<usize> {
+    let mut wires = Vec::new();
+
+    for (id, name) in wire_to_name.iter().enumerate() {
+        if name.chars().next().unwrap() == cls {
+            wires.push(id)
+        }
+    }
+
+    wires.sort_by_key(|wire_id| wire_to_name[*wire_id].as_str());
+    wires
+}
+
+#[derive(Clone, Copy)]
+pub enum Bus {
+    X,
+    Y,
+    Z,
+}
+
 #[derive(Debug)]
 pub struct Circuit {
     wire_to_name: Vec<String>,
@@ -124,6 +148,9 @@ pub struct Circuit {
     // input wires will be None
     wire_to_gate: Vec<Option<usize>>,
     gate_order: Vec<usize>,
+    x_bus: Vec<usize>,
+    y_bus: Vec<usize>,
+    z_bus: Vec<usize>,
 }
 
 impl Circuit {
@@ -155,20 +182,20 @@ impl Circuit {
             initial_state[*id] = Some(*val);
         }
 
-        let mut wire_names = Vec::new();
-        wire_names.resize_with(wire_ids.len(), Default::default);
+        let mut wire_to_name = Vec::new();
+        wire_to_name.resize_with(wire_ids.len(), Default::default);
 
         let mut wire_to_gate = Vec::new();
         wire_to_gate.resize_with(wire_ids.len(), Default::default);
 
         // fill in wire_names
         for (name, id) in wire_ids.into_iter() {
-            wire_names[id] = name;
+            wire_to_name[id] = name;
         }
 
         // fill in wire_to_gate
-        for wire_id in 0..wire_names.len() {
-            if wire_names[wire_id].starts_with("x") || wire_names[wire_id].starts_with("y") {
+        for wire_id in 0..wire_to_name.len() {
+            if wire_to_name[wire_id].starts_with("x") || wire_to_name[wire_id].starts_with("y") {
                 continue;
             }
             let mut found = false;
@@ -181,7 +208,7 @@ impl Circuit {
             }
 
             if !found {
-                panic!("no upstream gate for wire {}", wire_names[wire_id]);
+                panic!("no upstream gate for wire {}", wire_to_name[wire_id]);
             }
         }
 
@@ -207,12 +234,19 @@ impl Circuit {
             depth
         });
 
+        let x_bus = get_bus_wire_ids(&wire_to_name, 'x');
+        let y_bus = get_bus_wire_ids(&wire_to_name, 'y');
+        let z_bus = get_bus_wire_ids(&wire_to_name, 'z');
+
         Ok(Circuit {
-            wire_to_name: wire_names,
+            wire_to_name,
             gates,
             initial_state,
             wire_to_gate,
             gate_order,
+            x_bus,
+            y_bus,
+            z_bus,
         })
     }
 
@@ -259,10 +293,57 @@ impl Circuit {
         )
     }
 
-    pub fn bus(&self, cls: char) -> Vec<WireRef> {
-        let mut wires: Vec<_> = self.iter_wires().filter(|w| w.has_class(cls)).collect();
-        wires.sort_by_key(|w| w.name());
-        wires
+    pub fn iter_bus_lsb(&self, bus: Bus) -> impl Iterator<Item = WireRef> {
+        tools::iter_coro(
+            #[coroutine]
+            move || {
+                let bus = match bus {
+                    Bus::X => &self.x_bus,
+                    Bus::Y => &self.y_bus,
+                    Bus::Z => &self.z_bus,
+                };
+
+                for wire_id in bus.iter() {
+                    yield WireRef {
+                        circuit: self,
+                        wire_id: *wire_id,
+                    };
+                }
+            },
+        )
+    }
+
+    pub fn iter_bus_msb(&self, bus: Bus) -> impl Iterator<Item = WireRef> {
+        tools::iter_coro(
+            #[coroutine]
+            move || {
+                let bus = match bus {
+                    Bus::X => &self.x_bus,
+                    Bus::Y => &self.y_bus,
+                    Bus::Z => &self.z_bus,
+                };
+
+                for wire_id in bus.iter().rev() {
+                    yield WireRef {
+                        circuit: self,
+                        wire_id: *wire_id,
+                    };
+                }
+            },
+        )
+    }
+
+    pub fn len(&self) -> usize {
+        self.gates.len()
+    }
+
+    pub fn swap_outputs(&mut self, gate_i: usize, gate_j: usize) {
+        // preemptively fix wire_to_gate
+        let wire_i = self.gates[gate_i].output_wire_id;
+        let wire_j = self.gates[gate_j].output_wire_id;
+        self.wire_to_gate.swap(wire_i, wire_j);
+        let [gate_i, gate_j] = self.gates.get_many_mut([gate_i, gate_j]).unwrap();
+        std::mem::swap(&mut gate_i.output_wire_id, &mut gate_j.output_wire_id);
     }
 }
 
@@ -337,5 +418,9 @@ impl<'circuit> CircuitState<'circuit> {
 
     pub fn set(&mut self, wire: WireRef, val: bool) {
         self.state[wire.wire_id] = Some(val);
+    }
+
+    pub fn clear(&mut self) {
+        self.state.fill(None);
     }
 }
